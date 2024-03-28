@@ -1,4 +1,4 @@
-package java.fr.ul.miage.reseau.mv;
+package fr.ul.miage.reseau.mv;
 
 import org.apache.commons.cli.*;
 
