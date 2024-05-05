@@ -9,28 +9,44 @@ import java.util.logging.Logger;
 
 public class Serveur {
 
+    private static final String CMD_LINE_SYNTAX = "run";
+
     private static final Logger LOG = Logger.getLogger(Serveur.class.getName());
+    private static int maxNbConnection = 10; // Nombre maximum de connection simultanée par défaut
 
     public void run(String[] args) throws Exception {
 
         // Gestion d'un mode debug
         Options options = new Options();
-        Option debug = new Option("d", "debug", false, "Allow debugging output");
-        options.addOption(debug);
+        Option opDebug = new Option("d", "debug", false, "Allow debugging output");
+        Option opConnection = new Option("c", "connection", true, "Maximum number of allowed connection");
+        options.addOption(opDebug);
+        options.addOption(opConnection);
         CommandLineParser commandLineParser = new DefaultParser();
         try {
             CommandLine commandLine = commandLineParser.parse(options, args);
             LOG.setLevel(Level.WARNING);
-            if (commandLine.hasOption(debug)) {
+            if (commandLine.hasOption(opDebug)) {
                 LOG.setLevel(Level.INFO);
+            }
+            if (commandLine.hasOption(opConnection)){
+                String optionValue = commandLine.getOptionValue(opConnection);
+                maxNbConnection = Integer.parseInt(optionValue);
             }
         } catch (ParseException exception) {
             LOG.severe("Erreur dans la ligne de commande");
             HelpFormatter formatter = new HelpFormatter();
-            formatter.printHelp("run", options);
+            formatter.printHelp(CMD_LINE_SYNTAX, options);
             System.exit(1);
+        } catch (NumberFormatException exception){
+            LOG.severe("connection attend un entier positif");
+            HelpFormatter formatter = new HelpFormatter();
+            formatter.printHelp(CMD_LINE_SYNTAX, options);
+            System.exit(2);
         }
 
+        // Initialise le groupe de connection
+        ThreadGroup connectionGroup = new ThreadGroup("Groupe de connection");
 
         // écoute les commandes
         boolean keepGoing = true;
