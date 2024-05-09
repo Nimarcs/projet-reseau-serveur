@@ -1,6 +1,8 @@
 package fr.ul.miage.reseau.mv;
 
 import org.apache.commons.cli.*;
+import org.json.simple.JSONObject;
+import org.json.simple.parser.JSONParser;
 
 import java.io.*;
 import java.net.HttpURLConnection;
@@ -126,7 +128,7 @@ public class Serveur {
         }
     }
 
-    public int validateWork(int difficulty, String nonce, String hash){
+    public int validateWork(int difficulty, String nonce, String hash) throws org.json.simple.parser.ParseException{
         try {
             String url = "https://projet-raizo-idmc.netlify.app/.netlify/functions/validate_work";
 
@@ -157,7 +159,10 @@ public class Serveur {
                     errorResponse.append(line);
                 }
                 errorReader.close();
-                System.out.println("Erreur : La requête a échoué avec le code " + responseCode + " " + con.getResponseMessage() + errorResponse.toString());
+                JSONParser parser = new JSONParser();
+                JSONObject jsonResponse = (JSONObject) parser.parse(errorResponse.toString());
+                String details = (String) jsonResponse.get("details");
+                System.out.println("Erreur : " + details);
             }
             return responseCode;
         } catch (IOException e) {
