@@ -1,8 +1,10 @@
-package fr.ul.miage.reseau.mv;
+//package fr.ul.miage.reseau.mv;
 
 import org.apache.commons.cli.*;
 
-import java.io.Console;
+import java.io.*;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -69,27 +71,17 @@ public class Serveur {
         return true;
     }
 
-    public String generateWork(){
+    public int generateWork(int difficulty){
         try {
-            // URL du service
-            String url = "https://projet-raizo-idmc.netlify.app/.netlify/functions/generate_work?d=4";
-            
-            // Création de l'objet URL
+            String url = "https://projet-raizo-idmc.netlify.app/.netlify/functions/generate_work?d=" + difficulty;
             URL obj = new URL(url);
-            
-            // Ouverture de la connexion
             HttpURLConnection con = (HttpURLConnection) obj.openConnection();
-            
-            // Spécification de la méthode de la requête
             con.setRequestMethod("GET");
-            
-            // Ajout de l'en-tête Authorization
             con.setRequestProperty("Authorization", "Bearer recWL3uDC7EY3haCr");
-            
-            // Lecture de la réponse
+
             int responseCode = con.getResponseCode();
             System.out.println("Code de réponse : " + responseCode);
-            if (responseCode == HttpURLConnection.HTTP_CREATED) { // Succès
+            if (responseCode == HttpURLConnection.HTTP_CREATED) {
                 BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
                 String inputLine;
                 StringBuffer response = new StringBuffer();
@@ -97,9 +89,7 @@ public class Serveur {
                     response.append(inputLine);
                 }
                 in.close();
-                // Affichage des données de la tâche
                 System.out.println("Données de la tâche : " + response.toString());
-                return response.toString();
             } else if (responseCode == HttpURLConnection.HTTP_CONFLICT) { // Conflit
                 BufferedReader in = new BufferedReader(new InputStreamReader(con.getErrorStream()));
                 String inputLine;
@@ -108,72 +98,61 @@ public class Serveur {
                     response.append(inputLine);
                 }
                 in.close();
-                // Affichage du message d'erreur
                 System.out.println("Erreur : " + response.toString());
-                return "Conflit";
-            } else { // Autre code d'erreur
+            } else {
                 System.out.println("Erreur : La requête a échoué avec le code " + responseCode);
             }
-            return "Erreur";
+            return responseCode;
         } catch (IOException e) {
             e.printStackTrace();
-            return "Erreur";
+            return 0;
         }
     }
 
-    public boolean validateWork(){
+    public int validateWork(int difficulty, String nonce, String hash){
         try {
-            // URL du service
             String url = "https://projet-raizo-idmc.netlify.app/.netlify/functions/validate_work";
-            
-            // Paramètres de la requête
-            int difficulty = 3;
-            String nonce = "f42";
-            String hash = "000a23efc...";
-            
-            // Création de l'objet URL
-            URL obj = new URL(url);
-            
-            // Ouverture de la connexion
-            HttpURLConnection con = (HttpURLConnection) obj.openConnection();
-            
-            // Spécification de la méthode de la requête
-            con.setRequestMethod("POST");
-            
-            // Activation de l'envoi de données
-            con.setDoOutput(true);
-            
-            // Création du corps de la requête
+
             String requestBody = "{\"d\": " + difficulty + ", \"n\": \"" + nonce + "\", \"h\": \"" + hash + "\"}";
-            
-            // Envoi des données
-            DataOutputStream wr = new DataOutputStream(con.getOutputStream());
-            wr.writeBytes(requestBody);
-            wr.flush();
-            wr.close();
-            
-            // Lecture de la réponse
+            URL obj = new URL(url);
+            HttpURLConnection con = (HttpURLConnection) obj.openConnection();
+            con.setRequestMethod("POST");
+            con.setDoOutput(true);
+            con.setRequestProperty("Authorization", "Bearer recWL3uDC7EY3haCr");
+            con.setRequestProperty("Accept", "application/json");
+
+            try(OutputStream os = con.getOutputStream()) {
+                byte[] input = requestBody.getBytes("UTF8");
+                os.write(input, 0, input.length);
+            }
+
             int responseCode = con.getResponseCode();
             System.out.println("Code de réponse : " + responseCode);
-            if (responseCode == HttpURLConnection.HTTP_OK) { // Succès
+            if (responseCode == HttpURLConnection.HTTP_OK) {
                 System.out.println("La tâche a été validée avec succès.");
-                return true;
-            } else if (responseCode == HttpURLConnection.HTTP_CONFLICT) { // Conflit
+            } else if (responseCode == HttpURLConnection.HTTP_CONFLICT) {
                 System.out.println("Erreur : La difficulté a déjà été résolue.");
-                return false;
-            } else { // Autre code d'erreur
-                System.out.println("Erreur : La requête a échoué avec le code " + responseCode);
+            } else {
+                BufferedReader errorReader = new BufferedReader(new InputStreamReader(con.getErrorStream()));
+                StringBuilder errorResponse = new StringBuilder();
+                String line;
+                while ((line = errorReader.readLine()) != null) {
+                    errorResponse.append(line);
+                }
+                errorReader.close();
+                System.out.println("Erreur : La requête a échoué avec le code " + responseCode + " " + con.getResponseMessage() + errorResponse.toString());
             }
-            return false;
+            return responseCode;
         } catch (IOException e) {
             e.printStackTrace();
-            return false;
+            return 0;
         }
     }
 
 
     public static void main(String[] args) throws Exception {
-        new Serveur().run(args);
+        //new Serveur().run(args);
+        new Serveur().validateWork(1, "4",  "0c4f12188163dae848bd233757f3b0966972dd9efcaa54af4de92dfceb2c755e");
     }
 
 }
