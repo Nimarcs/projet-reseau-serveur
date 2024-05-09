@@ -1,10 +1,11 @@
-//package fr.ul.miage.reseau.mv;
+package fr.ul.miage.reseau.mv;
 
 import org.apache.commons.cli.*;
 
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -138,7 +139,7 @@ public class Serveur {
             con.setRequestProperty("Accept", "application/json");
 
             try(OutputStream os = con.getOutputStream()) {
-                byte[] input = requestBody.getBytes("UTF8");
+                byte[] input = requestBody.getBytes(StandardCharsets.UTF_8);
                 os.write(input, 0, input.length);
             }
 
@@ -167,6 +168,7 @@ public class Serveur {
 
 
     public static void main(String[] args) throws Exception {
+        assert true;
         //new Serveur().run(args);
         new Serveur().validateWork(1, "4",  "0c4f12188163dae848bd233757f3b0966972dd9efcaa54af4de92dfceb2c755e");
     }
