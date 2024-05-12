@@ -90,9 +90,12 @@ public class Serveur {
         return true;
     }
 
-    public int generateWork(int difficulty){
+    public int generateWork(int difficulty) throws org.json.simple.parser.ParseException{
         try {
-            String url = "https://projet-raizo-idmc.netlify.app/.netlify/functions/generate_work?d=" + difficulty;
+            StringBuilder sb = new StringBuilder();
+            sb.append("https://projet-raizo-idmc.netlify.app/.netlify/functions/generate_work?d=");
+            sb.append(difficulty);
+            String url = sb.toString();
             URL obj = new URL(url);
             HttpURLConnection con = (HttpURLConnection) obj.openConnection();
             con.setRequestMethod("GET");
@@ -108,8 +111,11 @@ public class Serveur {
                     response.append(inputLine);
                 }
                 in.close();
-                System.out.println("Données de la tâche : " + response.toString());
-            } else if (responseCode == HttpURLConnection.HTTP_CONFLICT) { // Conflit
+                JSONParser parser = new JSONParser();
+                JSONObject jsonResponse = (JSONObject) parser.parse(response.toString());
+                String data = (String) jsonResponse.get("data");
+                System.out.println("Données de la tâche : " + data);
+            } else if (responseCode == HttpURLConnection.HTTP_CONFLICT) {
                 BufferedReader in = new BufferedReader(new InputStreamReader(con.getErrorStream()));
                 String inputLine;
                 StringBuffer response = new StringBuffer();
@@ -117,7 +123,10 @@ public class Serveur {
                     response.append(inputLine);
                 }
                 in.close();
-                System.out.println("Erreur : " + response.toString());
+                JSONParser parser = new JSONParser();
+                JSONObject jsonResponse = (JSONObject) parser.parse(response.toString());
+                String details = (String) jsonResponse.get("details");
+                System.out.println("Erreur : " + details);
             } else {
                 System.out.println("Erreur : La requête a échoué avec le code " + responseCode);
             }
@@ -132,7 +141,15 @@ public class Serveur {
         try {
             String url = "https://projet-raizo-idmc.netlify.app/.netlify/functions/validate_work";
 
-            String requestBody = "{\"d\": " + difficulty + ", \"n\": \"" + nonce + "\", \"h\": \"" + hash + "\"}";
+            StringBuilder sb = new StringBuilder();
+            sb.append("{\"d\": ");
+            sb.append(difficulty);
+            sb.append(", \"n\": \"");
+            sb.append(nonce);
+            sb.append("\", \"h\": \"");
+            sb.append(hash);
+            sb.append("\"}");
+            String requestBody = sb.toString();
             URL obj = new URL(url);
             HttpURLConnection con = (HttpURLConnection) obj.openConnection();
             con.setRequestMethod("POST");
@@ -174,8 +191,9 @@ public class Serveur {
 
     public static void main(String[] args) throws Exception {
         assert true;
-        //new Serveur().run(args);
-        new Serveur().validateWork(1, "4",  "0c4f12188163dae848bd233757f3b0966972dd9efcaa54af4de92dfceb2c755e");
+        new Serveur().run(args);
+        //new Serveur().validateWork(5, "4",  "0c4f12188163dae848bd233757f3b0966972dd9efcaa54af4de92dfceb2c755e");
+        //new Serveur().generateWork(3);
     }
 
 }
