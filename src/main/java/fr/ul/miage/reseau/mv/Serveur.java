@@ -1,9 +1,5 @@
 package fr.ul.miage.reseau.mv;
 
-import org.apache.commons.cli.*;
-import org.json.simple.JSONObject;
-import org.json.simple.parser.JSONParser;
-
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -22,33 +18,33 @@ public class Serveur {
     public void run(String[] args) throws Exception {
 
         // Gestion d'un mode debug
-        Options options = new Options();
-        Option opDebug = new Option("d", "debug", false, "Allow debugging output");
-        Option opConnection = new Option("c", "connection", true, "Maximum number of allowed connection");
-        options.addOption(opDebug);
-        options.addOption(opConnection);
-        CommandLineParser commandLineParser = new DefaultParser();
-        try {
-            CommandLine commandLine = commandLineParser.parse(options, args);
-            LOG.setLevel(Level.WARNING);
-            if (commandLine.hasOption(opDebug)) {
-                LOG.setLevel(Level.INFO);
-            }
-            if (commandLine.hasOption(opConnection)){
-                String optionValue = commandLine.getOptionValue(opConnection);
-                maxNbConnection = Integer.parseInt(optionValue);
-            }
-        } catch (ParseException exception) {
-            LOG.severe("Erreur dans la ligne de commande");
-            HelpFormatter formatter = new HelpFormatter();
-            formatter.printHelp(CMD_LINE_SYNTAX, options);
-            System.exit(1);
-        } catch (NumberFormatException exception){
-            LOG.severe("connection attend un entier positif");
-            HelpFormatter formatter = new HelpFormatter();
-            formatter.printHelp(CMD_LINE_SYNTAX, options);
-            System.exit(2);
-        }
+        // Options options = new Options();
+        // Option opDebug = new Option("d", "debug", false, "Allow debugging output");
+        // Option opConnection = new Option("c", "connection", true, "Maximum number of allowed connection");
+        // options.addOption(opDebug);
+        // options.addOption(opConnection);
+        // CommandLineParser commandLineParser = new DefaultParser();
+        // try {
+        //     CommandLine commandLine = commandLineParser.parse(options, args);
+        //     LOG.setLevel(Level.WARNING);
+        //     if (commandLine.hasOption(opDebug)) {
+        //         LOG.setLevel(Level.INFO);
+        //     }
+        //     if (commandLine.hasOption(opConnection)){
+        //         String optionValue = commandLine.getOptionValue(opConnection);
+        //         maxNbConnection = Integer.parseInt(optionValue);
+        //     }
+        // } catch (ParseException exception) {
+        //     LOG.severe("Erreur dans la ligne de commande");
+        //     HelpFormatter formatter = new HelpFormatter();
+        //     formatter.printHelp(CMD_LINE_SYNTAX, options);
+        //     System.exit(1);
+        // } catch (NumberFormatException exception){
+        //     LOG.severe("connection attend un entier positif");
+        //     HelpFormatter formatter = new HelpFormatter();
+        //     formatter.printHelp(CMD_LINE_SYNTAX, options);
+        //     System.exit(2);
+        // }
 
         // Initialise le groupe de connection
         ThreadGroup connectionGroup = new ThreadGroup("Groupe de connection");
@@ -90,7 +86,7 @@ public class Serveur {
         return true;
     }
 
-    public int generateWork(int difficulty) throws org.json.simple.parser.ParseException{
+    public String generateWork(int difficulty){
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("https://projet-raizo-idmc.netlify.app/.netlify/functions/generate_work?d=");
@@ -111,10 +107,9 @@ public class Serveur {
                     response.append(inputLine);
                 }
                 in.close();
-                JSONParser parser = new JSONParser();
-                JSONObject jsonResponse = (JSONObject) parser.parse(response.toString());
-                String data = (String) jsonResponse.get("data");
-                System.out.println("Données de la tâche : " + data);
+
+                System.out.println(response.toString());
+                return response.toString().split("\"")[3];
             } else if (responseCode == HttpURLConnection.HTTP_CONFLICT) {
                 BufferedReader in = new BufferedReader(new InputStreamReader(con.getErrorStream()));
                 String inputLine;
@@ -123,21 +118,23 @@ public class Serveur {
                     response.append(inputLine);
                 }
                 in.close();
-                JSONParser parser = new JSONParser();
-                JSONObject jsonResponse = (JSONObject) parser.parse(response.toString());
-                String details = (String) jsonResponse.get("details");
-                System.out.println("Erreur : " + details);
+
+                System.out.println("Erreur : " + response.toString());
             } else {
                 System.out.println("Erreur : La requête a échoué avec le code " + responseCode);
             }
-            return responseCode;
+
+            
+
+
+            return String.valueOf(responseCode);
         } catch (IOException e) {
             e.printStackTrace();
-            return 0;
+            return String.valueOf(0);
         }
     }
 
-    public int validateWork(int difficulty, String nonce, String hash) throws org.json.simple.parser.ParseException{
+    public int validateWork(int difficulty, String nonce, String hash){
         try {
             String url = "https://projet-raizo-idmc.netlify.app/.netlify/functions/validate_work";
 
@@ -176,10 +173,7 @@ public class Serveur {
                     errorResponse.append(line);
                 }
                 errorReader.close();
-                JSONParser parser = new JSONParser();
-                JSONObject jsonResponse = (JSONObject) parser.parse(errorResponse.toString());
-                String details = (String) jsonResponse.get("details");
-                System.out.println("Erreur : " + details);
+                System.out.println("Erreur : " + errorResponse.toString());
             }
             return responseCode;
         } catch (IOException e) {
@@ -191,9 +185,9 @@ public class Serveur {
 
     public static void main(String[] args) throws Exception {
         assert true;
-        new Serveur().run(args);
-        //new Serveur().validateWork(5, "4",  "0c4f12188163dae848bd233757f3b0966972dd9efcaa54af4de92dfceb2c755e");
-        //new Serveur().generateWork(3);
+        // new Serveur().run(args);
+        // new Serveur().validateWork(5, "4",  "0c4f12188163dae848bd233757f3b0966972dd9efcaa54af4de92dfceb2c755e");
+        // new Serveur().generateWork(6);
     }
 
 }
