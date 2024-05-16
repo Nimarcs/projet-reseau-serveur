@@ -4,47 +4,51 @@ import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 
 public class Serveur {
-
-    private static final String CMD_LINE_SYNTAX = "run";
-
     private static final Logger LOG = Logger.getLogger(Serveur.class.getName());
     private static int maxNbConnection = 10; // Nombre maximum de connection simultanée par défaut
 
+    private static final String usageMessage = """
+            Usage :
+            Serveur
+             [-c|--connection NUMBER_OF_CONNECTION] - Specifie le nombre de connection maximale (default : 10)
+             [-d|--debug] - Active le mode debug
+             [-h|--help] - Affiche ce message
+            """;
+
     public void run(String[] args) throws Exception {
 
+        List<String> arguments = Arrays.asList(args);
+        LOG.setLevel(Level.WARNING);
+
+        //Gestion de --help
+        if (arguments.containsAll(Arrays.asList("-h", "--help"))) {
+            System.out.println(usageMessage);
+            System.exit(0);
+        }
         // Gestion d'un mode debug
-        // Options options = new Options();
-        // Option opDebug = new Option("d", "debug", false, "Allow debugging output");
-        // Option opConnection = new Option("c", "connection", true, "Maximum number of allowed connection");
-        // options.addOption(opDebug);
-        // options.addOption(opConnection);
-        // CommandLineParser commandLineParser = new DefaultParser();
-        // try {
-        //     CommandLine commandLine = commandLineParser.parse(options, args);
-        //     LOG.setLevel(Level.WARNING);
-        //     if (commandLine.hasOption(opDebug)) {
-        //         LOG.setLevel(Level.INFO);
-        //     }
-        //     if (commandLine.hasOption(opConnection)){
-        //         String optionValue = commandLine.getOptionValue(opConnection);
-        //         maxNbConnection = Integer.parseInt(optionValue);
-        //     }
-        // } catch (ParseException exception) {
-        //     LOG.severe("Erreur dans la ligne de commande");
-        //     HelpFormatter formatter = new HelpFormatter();
-        //     formatter.printHelp(CMD_LINE_SYNTAX, options);
-        //     System.exit(1);
-        // } catch (NumberFormatException exception){
-        //     LOG.severe("connection attend un entier positif");
-        //     HelpFormatter formatter = new HelpFormatter();
-        //     formatter.printHelp(CMD_LINE_SYNTAX, options);
-        //     System.exit(2);
-        // }
+        if (arguments.containsAll(Arrays.asList("-d", "--debug"))) {
+            LOG.setLevel(Level.INFO);
+        }
+
+        // Gestion de --connection
+        int pos = arguments.indexOf("-c");
+        if (pos == -1) pos = arguments.indexOf("--connection");
+        // If pos == -1 then the parameter -c is not there
+        if (pos != -1) {
+            try {
+                maxNbConnection = Integer.parseInt(arguments.get(pos + 1));
+            } catch (NumberFormatException | IndexOutOfBoundsException e) {
+                LOG.severe(usageMessage);
+                System.exit(1);
+            }
+        }
 
         // Initialise le groupe de connection
         ThreadGroup connectionGroup = new ThreadGroup("Groupe de connection");
@@ -86,7 +90,7 @@ public class Serveur {
         return true;
     }
 
-    public String generateWork(int difficulty){
+    public String generateWork(int difficulty) {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("https://projet-raizo-idmc.netlify.app/.netlify/functions/generate_work?d=");
@@ -124,8 +128,6 @@ public class Serveur {
                 System.out.println("Erreur : La requête a échoué avec le code " + responseCode);
             }
 
-            
-
 
             return String.valueOf(responseCode);
         } catch (IOException e) {
@@ -134,7 +136,7 @@ public class Serveur {
         }
     }
 
-    public int validateWork(int difficulty, String nonce, String hash){
+    public int validateWork(int difficulty, String nonce, String hash) {
         try {
             String url = "https://projet-raizo-idmc.netlify.app/.netlify/functions/validate_work";
 
@@ -154,7 +156,7 @@ public class Serveur {
             con.setRequestProperty("Authorization", "Bearer recWL3uDC7EY3haCr");
             con.setRequestProperty("Accept", "application/json");
 
-            try(OutputStream os = con.getOutputStream()) {
+            try (OutputStream os = con.getOutputStream()) {
                 byte[] input = requestBody.getBytes(StandardCharsets.UTF_8);
                 os.write(input, 0, input.length);
             }
@@ -184,10 +186,9 @@ public class Serveur {
 
 
     public static void main(String[] args) throws Exception {
-        assert true;
-        // new Serveur().run(args);
-        // new Serveur().validateWork(5, "4",  "0c4f12188163dae848bd233757f3b0966972dd9efcaa54af4de92dfceb2c755e");
-        // new Serveur().generateWork(6);
+        new Serveur().run(args);
+        new Serveur().validateWork(5, "4", "0c4f12188163dae848bd233757f3b0966972dd9efcaa54af4de92dfceb2c755e");
+        new Serveur().generateWork(6);
     }
 
 }
