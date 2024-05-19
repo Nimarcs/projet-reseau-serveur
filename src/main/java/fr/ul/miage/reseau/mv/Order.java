@@ -27,7 +27,7 @@ public class Order {
     }
 
     private boolean checkStart(int start) {
-        return start > 0;
+        return start >= 0;
     }
 
     private boolean checkIncrement(int increment) {

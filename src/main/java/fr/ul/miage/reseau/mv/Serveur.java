@@ -183,7 +183,7 @@ public class Serveur {
 
             int responseCode = con.getResponseCode();
             LOG.info("Code de réponse : " + responseCode);
-            if (responseCode == HttpURLConnection.HTTP_CREATED) {
+            if (responseCode == HttpURLConnection.HTTP_CREATED || responseCode == HttpURLConnection.HTTP_OK) {
                 BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
                 String inputLine;
                 StringBuffer response = new StringBuffer();

@@ -24,6 +24,12 @@ public class Connection implements Runnable {
 
     private String statusObtained;
 
+    private PrintWriter writer;
+
+    private BufferedReader reader;
+
+    private Socket socket;
+
     /**
      * TODO A termes mettre une façade qui permet juste de retransmettre quand on trouve la solution
      */
@@ -58,10 +64,10 @@ public class Connection implements Runnable {
             final InetAddress bindAddress = InetAddress.getByName("127.0.0.1");
             ServerSocket serverSocket = new ServerSocket(25555, 1, bindAddress);
             System.out.println("En attente de connection");
-            Socket socket = serverSocket.accept();
+            socket = serverSocket.accept();
             System.out.println("Connection trouvé avec " + socket.toString());
-            PrintWriter writer = new PrintWriter(new OutputStreamWriter(socket.getOutputStream()));
-            BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            writer = new PrintWriter(new OutputStreamWriter(socket.getOutputStream()));
+            reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             // On initie la connection
             System.out.println("WHO_ARE_YOU_? envoyé");
             writer.println("WHO_ARE_YOU_?");
@@ -117,35 +123,27 @@ public class Connection implements Runnable {
 
                 //Si on bosse pas mais qu'on est censé bosser
                 if (currentOrder != null && !solvedBySomeoneElse) {
-                    assert connectionStatus == ConnectionStatus.IDLE;
-                    writer.println("SOLVE " + currentOrder.getDifficulty());
-                    writer.println("PAYLOAD " + currentOrder.getPayload());
-                    writer.println("NONCE " + currentOrder.getStart() + " " + currentOrder.getIncrement());
-                    writer.flush();
+
                 }
 
                 //Si on a besoin du status du client
                 if (needToUpdateStatus) {
-                    needToUpdateStatus = false;
-                    writer.println("PROGRESS");
-                    writer.flush();
+
                 }
 
                 //Si on bosse mais que c'est déjà résolu
                 if (solvedBySomeoneElse) {
-                    assert connectionStatus == ConnectionStatus.WORKING;
-                    writer.println("SOLVED");
-                    writer.flush();
-                    connectionStatus = ConnectionStatus.IDLE;
+
                 }
 
                 //Si on est en train de fermer le serveur et que donc on ferme tout
                 if (needToBeKilled) {
-                    killConnection(socket, writer, reader);
+
                 }
 
 
             }
+            System.out.println("Sortie de la boucle");
 
             //Si on n'a pas déjà tué la connection, on la tue
             if (connectionStatus != ConnectionStatus.DEAD) {
@@ -184,6 +182,12 @@ public class Connection implements Runnable {
         this.solutionFound = null;
         this.solvedBySomeoneElse = false;
         this.currentOrder = order;
+        System.out.println("Commence ça travailler sur " + currentOrder.getPayload());
+        assert connectionStatus == ConnectionStatus.IDLE;
+        writer.println("PAYLOAD " + currentOrder.getPayload());
+        writer.println("NONCE " + currentOrder.getStart() + " " + currentOrder.getIncrement());
+        writer.println("SOLVE " + currentOrder.getDifficulty());
+        writer.flush();
     }
 
     /**
@@ -191,16 +195,21 @@ public class Connection implements Runnable {
      */
     public void tooSlow() {
         this.solvedBySomeoneElse = true;
+        assert connectionStatus == ConnectionStatus.WORKING;
+        writer.println("SOLVED");
+        writer.flush();
+        connectionStatus = ConnectionStatus.IDLE;
     }
 
     public void updateStatus() {
         this.needToUpdateStatus = true;
         this.statusObtained = null;
+        needToUpdateStatus = false;
+        writer.println("PROGRESS");
+        writer.flush();
     }
 
     public void readyReceived() {
-        if (connectionStatus != ConnectionStatus.WORKING)
-            throw new IllegalStateException("Cette situation n'est pas censé arrivé (si je suis pas idiot)");
         connectionStatus = ConnectionStatus.IDLE;
     }
 
@@ -220,6 +229,11 @@ public class Connection implements Runnable {
 
     public void scheduleKilling() {
         this.needToBeKilled = true;
+        try {
+            killConnection(socket, writer, reader);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     public String getStatusObtained() {
