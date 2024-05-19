@@ -13,7 +13,9 @@ import java.util.regex.Pattern;
 
 
 public class Serveur {
-    private static final Logger LOG = Logger.getLogger(Serveur.class.getName());
+
+    public static final Logger LOG = Logger.getLogger(Serveur.class.getName());
+
     private static int maxNbConnection = 10; // Nombre maximum de connection simultanée par défaut
 
     private List<Connection> connections = new LinkedList<>();
@@ -60,7 +62,7 @@ public class Serveur {
 
         // Initialise le groupe de connection
         ThreadGroup connectionGroup = new ThreadGroup("Groupe de connection");
-        Connection connection = new Connection(password, this);
+        Connection connection = new Connection(password, this, threads.size());
         Thread thread = new Thread(connectionGroup, connection);
         thread.start();
         threads.add(thread);
@@ -75,33 +77,26 @@ public class Serveur {
 
             keepGoing = processCommand(commande.trim());
         }
+        System.exit(0);
     }
 
-    private boolean processCommand(String cmd) throws Exception {
+    private boolean processCommand(String cmd) {
         if (("quit").equals(cmd)) {
             for (Connection connection : connections) {
                 connection.scheduleKilling();
-            }
-            //On attend que toutes les connections meurt
-            while (connections.stream()
-                    .filter((connection) -> (connection.getConnectionStatus() != ConnectionStatus.DEAD))
-                    .toList().isEmpty()) {
-                //TODO ajouter timeout
             }
             return false;
         }
 
         if (("cancel").equals(cmd)) {
-            // TODO cancel task
+            for (Connection connection : connections) {
+                connection.cancelOrder();
+            }
 
         } else if (("status").equals(cmd)) {
+            LOG.info("Demande des status de toutes les connections");
             for (Connection connection : connections) {
-                connection.updateStatus();
-            }
-            while (connections.stream()
-                    .filter((connection) -> (connection.getStatusObtained() == null))
-                    .toList().isEmpty()) {
-                //TODO ajouter timeout
+                connection.obtainStatus();
             }
 
         } else if (("help").equals(cmd.trim())) {
@@ -161,21 +156,37 @@ public class Serveur {
 
         //Si la solution est correcte
         if (webResponseCode == HttpURLConnection.HTTP_OK) {
-            LOG.info("Solution validée");
+            System.out.println("Solution validée");
             for (Connection c : connections) {
                 c.tooSlow();
             }
         } else {
+            LOG.severe("Le worker a menti ce salaud !");
+            LOG.severe("Info : " + order.getDifficulty() + " - " + solution.getNonce() + " - " + solution.getHash());
             //TODO traiter le cas ou le client m'a menti
         }
     }
 
+    /**
+     * Méthode appelé par la connection lorsqu'elle obtient le status de son client
+     *
+     * @param connection connection dont le status est associé
+     * @param status     status du client connecté
+     */
+    public void statusObtained(Connection connection, String status) {
+        System.out.printf("Connection %d : %s", connection.getNumber(), status);
+    }
+
+    /**
+     * Méthode qui demande du travail a l'api web
+     * Si le travail est trouvé renvoie le payload
+     * Si une erreur nous reviens le code d'erreur web est renvoyé
+     * @param difficulty difficulté demandé pour le travail
+     * @return Code d'erreur web | Payload
+     */
     private String generateWork(int difficulty) {
         try {
-            StringBuilder sb = new StringBuilder();
-            sb.append("https://projet-raizo-idmc.netlify.app/.netlify/functions/generate_work?d=");
-            sb.append(difficulty);
-            String url = sb.toString();
+            String url = "https://projet-raizo-idmc.netlify.app/.netlify/functions/generate_work?d=" + difficulty;
             URL obj = new URL(url);
             HttpURLConnection con = (HttpURLConnection) obj.openConnection();
             con.setRequestMethod("GET");
@@ -203,7 +214,7 @@ public class Serveur {
                 }
                 in.close();
 
-                LOG.severe("Erreur : " + response.toString());
+                LOG.severe("Erreur : " + response);
             } else {
                 LOG.severe("Erreur : La requête a échoué avec le code " + responseCode);
             }
@@ -216,6 +227,13 @@ public class Serveur {
         }
     }
 
+    /**
+     * Envoie une solution a l'api web
+     * @param difficulty difficultée associé au probleme
+     * @param nonce nonce trouvé
+     * @param hash hash obtenu avec le payload + nonce
+     * @return Code de reponse web
+     */
     private int validateWork(int difficulty, String nonce, String hash) {
         try {
             String url = "https://projet-raizo-idmc.netlify.app/.netlify/functions/validate_work";
@@ -255,7 +273,7 @@ public class Serveur {
                     errorResponse.append(line);
                 }
                 errorReader.close();
-                System.out.println("Erreur : " + errorResponse.toString());
+                System.out.println("Erreur : " + errorResponse);
             }
             return responseCode;
         } catch (IOException e) {

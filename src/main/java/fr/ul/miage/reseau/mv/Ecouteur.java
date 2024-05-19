@@ -17,6 +17,8 @@ public class Ecouteur implements Runnable {
 
     private final PrintWriter writer;
 
+    private boolean errorFound = false;
+
     private static final Logger LOG = Logger.getLogger(Ecouteur.class.getName());
 
     public Ecouteur(Connection connection, Socket socket, PrintWriter writer, BufferedReader reader) {
@@ -31,7 +33,8 @@ public class Ecouteur implements Runnable {
      */
     @Override
     public void run() {
-        while (socket.isConnected()) {
+        LOG.info("Écouteur de la connection " + connection.getNumber() + " lancé");
+        while (socket.isConnected() && !errorFound) {
             try {
                 String message = reader.readLine();
 
@@ -52,8 +55,8 @@ public class Ecouteur implements Runnable {
 
                     //STATUS (Réponse au PROGRESS)
                 } else if (message != null && message.startsWith("STATUS ")) {
-                    connection.setStatusObtained(message.substring(6));
-
+                    LOG.info("Connection " + connection.getNumber() + " : Status reçu (" + message + ")");
+                    connection.statusReceived(message.substring(6));
 
                     //Message inconnu
                 } else {
@@ -62,12 +65,17 @@ public class Ecouteur implements Runnable {
                 }
 
             } catch (IOException e) {
-                LOG.severe("Erreur dans reader" + e.getMessage());
-                try {
-                    connection.killConnection(socket, writer, reader);
-                } catch (IOException ex) {
-                    throw new RuntimeException(ex);
+                errorFound = true;
+                //Si c'est fini on laisse juste tout mourir
+                if (!socket.isClosed()) {
+                    LOG.severe("Erreur dans reader ou writer " + e.getMessage());
+                    try {
+                        connection.killConnection(socket, writer, reader);
+                    } catch (IOException ex) {
+                        throw new RuntimeException(ex);
+                    }
                 }
+
             }
         }
     }

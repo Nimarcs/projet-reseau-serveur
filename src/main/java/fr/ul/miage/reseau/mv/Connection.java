@@ -12,17 +12,7 @@ public class Connection implements Runnable {
 
     private final String password;
 
-    private boolean solvedBySomeoneElse;
-
     private Order currentOrder;
-
-    private boolean needToUpdateStatus;
-
-    private Solution solutionFound;
-
-    private boolean needToBeKilled;
-
-    private String statusObtained;
 
     private PrintWriter writer;
 
@@ -30,18 +20,17 @@ public class Connection implements Runnable {
 
     private Socket socket;
 
-    /**
-     * TODO A termes mettre une façade qui permet juste de retransmettre quand on trouve la solution
-     */
+    private int number;
+
     private Serveur serveur;
 
-    public Connection(String password, Serveur serveur) {
+    public Connection(String password, Serveur serveur, int number) {
         this.password = password;
-        connectionStatus = ConnectionStatus.ALONE;
-        solvedBySomeoneElse = false;
-        statusObtained = null;
-        currentOrder = null;
+        this.number = number;
         this.serveur = serveur;
+
+        connectionStatus = ConnectionStatus.ALONE;
+        currentOrder = null;
     }
 
 
@@ -63,26 +52,31 @@ public class Connection implements Runnable {
             // On cree la connection avec le client
             final InetAddress bindAddress = InetAddress.getByName("127.0.0.1");
             ServerSocket serverSocket = new ServerSocket(25555, 1, bindAddress);
-            System.out.println("En attente de connection");
+            Serveur.LOG.info("Connection " + number + " : " + "En attente de connection");
             socket = serverSocket.accept();
-            System.out.println("Connection trouvé avec " + socket.toString());
+            Serveur.LOG.info("Connection " + number + " : " + "Connection trouvé avec " + socket.toString());
             writer = new PrintWriter(new OutputStreamWriter(socket.getOutputStream()));
             reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+
+            /*
+            Processus de connection
+             */
+
             // On initie la connection
-            System.out.println("WHO_ARE_YOU_? envoyé");
+            Serveur.LOG.info("Connection " + number + " : " + "WHO_ARE_YOU_? envoyé");
             writer.println("WHO_ARE_YOU_?");
             writer.flush();
 
             // S'il ne répond pas correctement on tue la connection
             String supposedItsME = reader.readLine();
             if (!Objects.equals(supposedItsME, "ITS_ME")) {
-                System.out.println("ITS_ME non reçu");
+                Serveur.LOG.info("Connection " + number + " : " + "ITS_ME non reçu");
                 killConnection(socket, writer, reader);
             }
-            System.out.println("reçu");
+            Serveur.LOG.info("Connection " + number + " : " + "ITS_ME reçu");
 
             //On demande le mot de passe
-            System.out.println("GIMME_PASSWORD envoyé");
+            Serveur.LOG.info("Connection " + number + " : " + "GIMME_PASSWORD envoyé");
             writer.println("GIMME_PASSWORD");
             writer.flush();
 
@@ -90,64 +84,49 @@ public class Connection implements Runnable {
             // Si le mot de passe est incorrect
             if (!Objects.equals(supposedPassword, "PASSWD " + password)) {
                 // On précise au client que son mot de passe est faux puis ferme la connection
-                System.out.println("YOU_DONT_FOOL_ME envoyé");
+                Serveur.LOG.info("Connection " + number + " : " + "YOU_DONT_FOOL_ME envoyé");
                 writer.println("YOU_DONT_FOOL_ME");
                 writer.flush();
 
                 killConnection(socket, writer, reader);
             } else {
-                System.out.println("HELLO_YOU envoyé");
+                Serveur.LOG.info("Connection " + number + " : " + "HELLO_YOU envoyé");
                 writer.println("HELLO_YOU");
                 writer.flush();
 
                 String supposedREADY = reader.readLine();
                 if (!Objects.equals(supposedREADY, "READY")) {
-                    System.out.println("READY non reçu");
+                    Serveur.LOG.info("Connection " + number + " : " + "READY non reçu");
                     killConnection(socket, writer, reader);
                 }
-                System.out.println("OK envoyé");
+                Serveur.LOG.info("Connection " + number + " : " + "OK envoyé");
                 writer.println("OK");
                 writer.flush();
 
                 connectionStatus = ConnectionStatus.IDLE;
             }
 
-            //on démarre un écouteur
+            /*
+            Séparation en 2 thread
+            Lecture / Maintiens en vie
+             */
+
+            //On démarre un écouteur
+            //Lecture
             Ecouteur ecouteur = new Ecouteur(this, socket, writer, reader);
             Thread ecouteurThread = new Thread(ecouteur);
             ecouteurThread.start();
 
-            System.out.println("Démarrage de la boucle");
+            //Maintient en vie
+            Serveur.LOG.info("Connection " + number + " : " + "Démarrage de la boucle");
             //On maintient la connection
             while (socket.isConnected()) {
-
-                //Si on bosse pas mais qu'on est censé bosser
-                if (currentOrder != null && !solvedBySomeoneElse) {
-
-                }
-
-                //Si on a besoin du status du client
-                if (needToUpdateStatus) {
-
-                }
-
-                //Si on bosse mais que c'est déjà résolu
-                if (solvedBySomeoneElse) {
-
-                }
-
-                //Si on est en train de fermer le serveur et que donc on ferme tout
-                if (needToBeKilled) {
-
-                }
-
-
+                //On attend la fin de vie de la socket
             }
-            System.out.println("Sortie de la boucle");
+            Serveur.LOG.info("Connection " + number + " : " + "Sortie de la boucle");
 
             //Si on n'a pas déjà tué la connection, on la tue
             if (connectionStatus != ConnectionStatus.DEAD) {
-
                 killConnection(socket, writer, reader);
             }
         } catch (IOException | RuntimeException e) {
@@ -155,6 +134,10 @@ public class Connection implements Runnable {
             e.printStackTrace();
         }
     }
+
+    /*
+    Appelé par l'écouteur
+     */
 
     /**
      * Tue la connection fournie proprement
@@ -169,6 +152,22 @@ public class Connection implements Runnable {
         socket.close();
     }
 
+    public void readyReceived() {
+        connectionStatus = ConnectionStatus.IDLE;
+    }
+
+    public void foundReceived(Solution solution) {
+        serveur.solutionFound(this, solution);
+    }
+
+    public void statusReceived(String status) {
+        serveur.statusObtained(this, status);
+    }
+
+    /*
+    Appelé par le serveur
+     */
+
     /**
      * Donne un nouvel ordre aux worker connecter
      * La connection doit être IDLE
@@ -179,14 +178,22 @@ public class Connection implements Runnable {
     public void setNewOrder(Order order) {
         if (connectionStatus != ConnectionStatus.IDLE)
             throw new IllegalStateException("Can't define new order if the connection is not idle");
-        this.solutionFound = null;
-        this.solvedBySomeoneElse = false;
+
+        //On définit l'ordre
         this.currentOrder = order;
-        System.out.println("Commence ça travailler sur " + currentOrder.getPayload());
-        assert connectionStatus == ConnectionStatus.IDLE;
+
+        //On lance la demande de travail
+        Serveur.LOG.info("Connection " + number + " : " + "Commence ça travailler sur " + currentOrder.getPayload());
         writer.println("PAYLOAD " + currentOrder.getPayload());
         writer.println("NONCE " + currentOrder.getStart() + " " + currentOrder.getIncrement());
         writer.println("SOLVE " + currentOrder.getDifficulty());
+        writer.flush();
+    }
+
+    public void cancelOrder() {
+        currentOrder = null;
+        //on ment aux clients
+        writer.println("CANCELLED");
         writer.flush();
     }
 
@@ -194,58 +201,39 @@ public class Connection implements Runnable {
      * Donne l'information à la connection que le problème en cours a déjà été résolu
      */
     public void tooSlow() {
-        this.solvedBySomeoneElse = true;
         assert connectionStatus == ConnectionStatus.WORKING;
         writer.println("SOLVED");
         writer.flush();
-        connectionStatus = ConnectionStatus.IDLE;
     }
 
-    public void updateStatus() {
-        this.needToUpdateStatus = true;
-        this.statusObtained = null;
-        needToUpdateStatus = false;
+    public void obtainStatus() {
         writer.println("PROGRESS");
         writer.flush();
     }
 
-    public void readyReceived() {
-        connectionStatus = ConnectionStatus.IDLE;
-    }
-
-    public void foundReceived(Solution solution) {
-        serveur.solutionFound(this, solution);
-    }
-
-    /**
-     * Return the current status of the connection
-     * /!\ It is not the status of the worker
-     *
-     * @return status of the connection
-     */
-    public ConnectionStatus getConnectionStatus() {
-        return connectionStatus;
-    }
-
     public void scheduleKilling() {
-        this.needToBeKilled = true;
         try {
             killConnection(socket, writer, reader);
         } catch (IOException e) {
+            Serveur.LOG.severe("Echec de la fermeture propre de la connection " + number);
             e.printStackTrace();
         }
     }
 
-    public String getStatusObtained() {
-        return statusObtained;
-    }
-
-    public void setStatusObtained(String statusObtained) {
-        this.statusObtained = statusObtained;
-    }
+    /*
+    Getter
+     */
 
     public Order getCurrentOrder() {
         return currentOrder;
+    }
+
+    public int getNumber() {
+        return number;
+    }
+
+    public ConnectionStatus getConnectionStatus() {
+        return connectionStatus;
     }
 }
 
