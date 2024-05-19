@@ -64,9 +64,9 @@ public class Connection implements Runnable {
             BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             // On initie la connection
             System.out.println("WHO_ARE_YOU_? envoyé");
-            while (socket.isConnected()) {
-                writer.println("WHO_ARE_YOU_?");
-            }
+            writer.println("WHO_ARE_YOU_?");
+            writer.flush();
+
             // S'il ne répond pas correctement on tue la connection
             String supposedItsME = reader.readLine();
             if (!Objects.equals(supposedItsME, "ITS_ME")) {
@@ -78,16 +78,22 @@ public class Connection implements Runnable {
             //On demande le mot de passe
             System.out.println("GIMME_PASSWORD envoyé");
             writer.println("GIMME_PASSWORD");
+            writer.flush();
+
             String supposedPassword = reader.readLine();
             // Si le mot de passe est incorrect
             if (!Objects.equals(supposedPassword, "PASSWD " + password)) {
                 // On précise au client que son mot de passe est faux puis ferme la connection
                 System.out.println("YOU_DONT_FOOL_ME envoyé");
                 writer.println("YOU_DONT_FOOL_ME");
+                writer.flush();
+
                 killConnection(socket, writer, reader);
             } else {
                 System.out.println("HELLO_YOU envoyé");
                 writer.println("HELLO_YOU");
+                writer.flush();
+
                 String supposedREADY = reader.readLine();
                 if (!Objects.equals(supposedREADY, "READY")) {
                     System.out.println("READY non reçu");
@@ -95,6 +101,8 @@ public class Connection implements Runnable {
                 }
                 System.out.println("OK envoyé");
                 writer.println("OK");
+                writer.flush();
+
                 connectionStatus = ConnectionStatus.IDLE;
             }
 
@@ -113,18 +121,21 @@ public class Connection implements Runnable {
                     writer.println("SOLVE " + currentOrder.getDifficulty());
                     writer.println("PAYLOAD " + currentOrder.getPayload());
                     writer.println("NONCE " + currentOrder.getStart() + " " + currentOrder.getIncrement());
+                    writer.flush();
                 }
 
                 //Si on a besoin du status du client
                 if (needToUpdateStatus) {
                     needToUpdateStatus = false;
                     writer.println("PROGRESS");
+                    writer.flush();
                 }
 
                 //Si on bosse mais que c'est déjà résolu
                 if (solvedBySomeoneElse) {
                     assert connectionStatus == ConnectionStatus.WORKING;
                     writer.println("SOLVED");
+                    writer.flush();
                     connectionStatus = ConnectionStatus.IDLE;
                 }
 

@@ -39,6 +39,7 @@ public class Ecouteur implements Runnable {
                 if (Objects.equals(message, "READY")) {
                     connection.readyReceived();
                     writer.println("OK");
+                    writer.flush();
 
                     //Found
                 } else if (message != null && message.startsWith("FOUND ")) {
