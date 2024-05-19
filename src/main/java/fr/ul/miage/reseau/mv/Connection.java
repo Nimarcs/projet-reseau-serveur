@@ -55,31 +55,45 @@ public class Connection implements Runnable {
         connectionStatus = ConnectionStatus.ALONE;
         try {
             // On cree la connection avec le client
-            final InetAddress bindAddress = InetAddress.getByName("0.0.0.0");
+            final InetAddress bindAddress = InetAddress.getByName("127.0.0.1");
             ServerSocket serverSocket = new ServerSocket(25555, 1, bindAddress);
+            System.out.println("En attente de connection");
             Socket socket = serverSocket.accept();
+            System.out.println("Connection trouvé avec " + socket.toString());
             PrintWriter writer = new PrintWriter(new OutputStreamWriter(socket.getOutputStream()));
             BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-
             // On initie la connection
-            writer.println("WHO_ARE_YOU_?");
+            System.out.println("WHO_ARE_YOU_? envoyé");
+            while (socket.isConnected()) {
+                writer.println("WHO_ARE_YOU_?");
+            }
             // S'il ne répond pas correctement on tue la connection
             String supposedItsME = reader.readLine();
             if (!Objects.equals(supposedItsME, "ITS_ME")) {
+                System.out.println("ITS_ME non reçu");
                 killConnection(socket, writer, reader);
             }
+            System.out.println("reçu");
 
             //On demande le mot de passe
+            System.out.println("GIMME_PASSWORD envoyé");
             writer.println("GIMME_PASSWORD");
             String supposedPassword = reader.readLine();
             // Si le mot de passe est incorrect
             if (!Objects.equals(supposedPassword, "PASSWD " + password)) {
                 // On précise au client que son mot de passe est faux puis ferme la connection
+                System.out.println("YOU_DONT_FOOL_ME envoyé");
                 writer.println("YOU_DONT_FOOL_ME");
                 killConnection(socket, writer, reader);
             } else {
+                System.out.println("HELLO_YOU envoyé");
                 writer.println("HELLO_YOU");
                 String supposedREADY = reader.readLine();
+                if (!Objects.equals(supposedREADY, "READY")) {
+                    System.out.println("READY non reçu");
+                    killConnection(socket, writer, reader);
+                }
+                System.out.println("OK envoyé");
                 writer.println("OK");
                 connectionStatus = ConnectionStatus.IDLE;
             }
@@ -89,6 +103,7 @@ public class Connection implements Runnable {
             Thread ecouteurThread = new Thread(ecouteur);
             ecouteurThread.start();
 
+            System.out.println("Démarrage de la boucle");
             //On maintient la connection
             while (socket.isConnected()) {
 
