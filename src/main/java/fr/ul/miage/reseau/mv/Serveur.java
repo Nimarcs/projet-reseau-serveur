@@ -2,6 +2,8 @@ package fr.ul.miage.reseau.mv;
 
 import java.io.*;
 import java.net.HttpURLConnection;
+import java.net.InetAddress;
+import java.net.ServerSocket;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -61,19 +63,33 @@ public class Serveur {
         }
 
         // Initialise le groupe de connection
+        final InetAddress bindAddress = InetAddress.getByName("127.0.0.1");
+        ServerSocket serverSocket = new ServerSocket(25555, maxNbConnection, bindAddress);
         ThreadGroup connectionGroup = new ThreadGroup("Groupe de connection");
-        Connection connection = new Connection(password, this, threads.size());
-        Thread thread = new Thread(connectionGroup, connection);
-        thread.start();
-        threads.add(thread);
-        connections.add(connection);
+        Connection firstConnection = new Connection(password, this, threads.size(), serverSocket);
+        Thread firstThread = new Thread(connectionGroup, firstConnection);
+        firstThread.start();
+        threads.add(firstThread);
+        connections.add(firstConnection);
 
-        // écoute les commandes
+        // Écoute les commandes & augmente le nombre de connection
         boolean keepGoing = true;
         final Console console = System.console();
         while (keepGoing) {
             final String commande = console.readLine("$ ");
             if (commande == null) break;
+            LOG.info("Max connection : " + maxNbConnection + " - last connection status : " + connections.get(connections.size()-1).getConnectionStatus() + " (" + (connections.size()-1) + ")");
+
+            //Si toute les connections sont prises et qu'on a pas atteint le max, on en ajoute une
+            if (maxNbConnection > connections.size() && connections.get(connections.size()-1).getConnectionStatus() != ConnectionStatus.ALONE){
+                System.out.println("Totalité de connection utilisé, ajout d'une nouvelle connection");
+                //On créer et lance la nouvelle connection
+                Connection newConnection = new Connection(password, this, threads.size(), serverSocket);
+                Thread newThread = new Thread(connectionGroup, newConnection);
+                newThread.start();
+                threads.add(newThread);
+                connections.add(newConnection);
+            }
 
             keepGoing = processCommand(commande.trim());
         }
@@ -82,20 +98,20 @@ public class Serveur {
 
     private boolean processCommand(String cmd) {
         if (("quit").equals(cmd)) {
-            for (Connection connection : connections) {
+            for (Connection connection : getNotAloneConnections()) {
                 connection.scheduleKilling();
             }
             return false;
         }
 
         if (("cancel").equals(cmd)) {
-            for (Connection connection : connections) {
+            for (Connection connection : getNotAloneConnections()) {
                 connection.cancelOrder();
             }
 
         } else if (("status").equals(cmd)) {
             LOG.info("Demande des status de toutes les connections");
-            for (Connection connection : connections) {
+            for (Connection connection : getNotAloneConnections()) {
                 connection.obtainStatus();
             }
 
@@ -142,6 +158,12 @@ public class Serveur {
         return true;
     }
 
+    private List<Connection> getNotAloneConnections() {
+        return connections.stream()
+                .filter((connection -> connection.getConnectionStatus() != ConnectionStatus.ALONE))
+                .toList();
+    }
+
     /**
      * Méthode appelé par la connection lorsqu'elle trouve la solution
      * Doit envoyer la solution pour verification et retransmettre aux autres connection que le résultat à été trouvé
@@ -157,7 +179,7 @@ public class Serveur {
         //Si la solution est correcte
         if (webResponseCode == HttpURLConnection.HTTP_OK) {
             System.out.println("Solution validée");
-            for (Connection c : connections) {
+            for (Connection c : getNotAloneConnections()) {
                 c.tooSlow();
             }
         } else {
@@ -174,7 +196,7 @@ public class Serveur {
      * @param status     status du client connecté
      */
     public void statusObtained(Connection connection, String status) {
-        System.out.printf("Connection %d : %s", connection.getNumber(), status);
+        System.out.printf("Connection %d : %s\n", connection.getNumber(), status);
     }
 
     /**

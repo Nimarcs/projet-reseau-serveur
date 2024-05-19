@@ -24,10 +24,13 @@ public class Connection implements Runnable {
 
     private Serveur serveur;
 
-    public Connection(String password, Serveur serveur, int number) {
+    private ServerSocket serverSocket;
+
+    public Connection(String password, Serveur serveur, int number, ServerSocket serverSocket) {
         this.password = password;
         this.number = number;
         this.serveur = serveur;
+        this.serverSocket = serverSocket;
 
         connectionStatus = ConnectionStatus.ALONE;
         currentOrder = null;
@@ -50,8 +53,6 @@ public class Connection implements Runnable {
         connectionStatus = ConnectionStatus.ALONE;
         try {
             // On cree la connection avec le client
-            final InetAddress bindAddress = InetAddress.getByName("127.0.0.1");
-            ServerSocket serverSocket = new ServerSocket(25555, 1, bindAddress);
             Serveur.LOG.info("Connection " + number + " : " + "En attente de connection");
             socket = serverSocket.accept();
             Serveur.LOG.info("Connection " + number + " : " + "Connection trouvé avec " + socket.toString());
