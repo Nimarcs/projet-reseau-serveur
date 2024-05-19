@@ -5,14 +5,20 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.Pattern;
 
 
 public class Serveur {
     private static final Logger LOG = Logger.getLogger(Serveur.class.getName());
     private static int maxNbConnection = 10; // Nombre maximum de connection simultanée par défaut
+
+    private List<Connection> connections = new LinkedList<>();
+
+    private List<Thread> threads = new LinkedList<>();
 
     private static final String usageMessage = """
             Usage :
@@ -22,18 +28,20 @@ public class Serveur {
              [-h|--help] - Affiche ce message
             """;
 
+    private String password = "GAUTIER_EST_TRES_CHAUD";
+
     public void run(String[] args) throws Exception {
 
         List<String> arguments = Arrays.asList(args);
         LOG.setLevel(Level.WARNING);
 
         //Gestion de --help
-        if (arguments.containsAll(Arrays.asList("-h", "--help"))) {
+        if (arguments.contains("-h") || arguments.contains("--help")) {
             System.out.println(usageMessage);
             System.exit(0);
         }
         // Gestion d'un mode debug
-        if (arguments.containsAll(Arrays.asList("-d", "--debug"))) {
+        if (arguments.contains("-d") || arguments.contains("--debug")) {
             LOG.setLevel(Level.INFO);
         }
 
@@ -52,6 +60,11 @@ public class Serveur {
 
         // Initialise le groupe de connection
         ThreadGroup connectionGroup = new ThreadGroup("Groupe de connection");
+        Connection connection = new Connection(password, this);
+        Thread thread = new Thread(connectionGroup, connection);
+        thread.start();
+        threads.add(thread);
+        connections.add(connection);
 
         // écoute les commandes
         boolean keepGoing = true;
@@ -66,7 +79,15 @@ public class Serveur {
 
     private boolean processCommand(String cmd) throws Exception {
         if (("quit").equals(cmd)) {
-            // TODO shutdown
+            for (Connection connection : connections) {
+                connection.scheduleKilling();
+            }
+            //On attend que toutes les connections meurt
+            while (connections.stream()
+                    .filter((connection) -> (connection.getConnectionStatus() != ConnectionStatus.DEAD))
+                    .toList().isEmpty()) {
+                //TODO ajouter timeout
+            }
             return false;
         }
 
@@ -74,7 +95,14 @@ public class Serveur {
             // TODO cancel task
 
         } else if (("status").equals(cmd)) {
-            // TODO show workers status
+            for (Connection connection : connections) {
+                connection.updateStatus();
+            }
+            while (connections.stream()
+                    .filter((connection) -> (connection.getStatusObtained() == null))
+                    .toList().isEmpty()) {
+                //TODO ajouter timeout
+            }
 
         } else if (("help").equals(cmd.trim())) {
             System.out.println(" • status - display informations about connected workers");
@@ -84,13 +112,65 @@ public class Serveur {
             System.out.println(" • quit - terminate pending work and quit");
 
         } else if (cmd.startsWith("solve")) {
-            // TODO start solving ...
+            try {
+                int difficulty = Integer.parseInt(cmd.substring(6));
+                String payload = generateWork(difficulty);
+                Pattern pattern = Pattern.compile("[0-9]{1,3}");
+
+                //Si le payload est un nombre, on a une erreur
+                if (pattern.matcher(payload).matches()) {
+                    LOG.severe("Erreur web : " + payload);
+                } else {
+                    //Sinon on peut continuer
+                    LOG.info("Payload récupéré : " + payload);
+
+
+                    //TODO faire en sorte que les connections soit prete a recevoir l'ordre au lieu de juste prier
+
+                    //On récupère les connections qui sont prêtes à travailler
+                    List<Connection> connectionPreteATravailler = connections.stream()
+                            .filter((connection) -> (connection.getConnectionStatus() == ConnectionStatus.IDLE)).toList();
+                    //On demande aux connection de travailler
+                    int nbConnected = connectionPreteATravailler.size();
+                    LOG.info("Le serveur demande aux " + nbConnected + " client de travailler");
+                    for (int i = 0; i < nbConnected; i++) {
+                        Connection connection = connectionPreteATravailler.get(i);
+                        connection.setNewOrder(new Order(i, nbConnected, difficulty, payload));
+                    }
+                }
+
+            } catch (NumberFormatException e) {
+                LOG.severe("solve <d> - try to mine with given difficulty prend un nombre en parametre.\n" + cmd.substring(6) + " n'est pas un nombre");
+            }
         }
 
         return true;
     }
 
-    public String generateWork(int difficulty) {
+    /**
+     * Méthode appelé par la connection lorsqu'elle trouve la solution
+     * Doit envoyer la solution pour verification et retransmettre aux autres connection que le résultat à été trouvé
+     *
+     * @param connection connection qui a trouvé la solution
+     * @param solution   solution trouvée
+     */
+    public void solutionFound(Connection connection, Solution solution) {
+        LOG.info("Solution trouvé, envoie de la demande de validation");
+        Order order = connection.getCurrentOrder();
+        int webResponseCode = validateWork(order.getDifficulty(), solution.getNonce(), solution.getHash());
+
+        //Si la solution est correcte
+        if (webResponseCode == HttpURLConnection.HTTP_OK) {
+            LOG.info("Solution validée");
+            for (Connection c : connections) {
+                c.tooSlow();
+            }
+        } else {
+            //TODO traiter le cas ou le client m'a menti
+        }
+    }
+
+    private String generateWork(int difficulty) {
         try {
             StringBuilder sb = new StringBuilder();
             sb.append("https://projet-raizo-idmc.netlify.app/.netlify/functions/generate_work?d=");
@@ -102,7 +182,7 @@ public class Serveur {
             con.setRequestProperty("Authorization", "Bearer recWL3uDC7EY3haCr");
 
             int responseCode = con.getResponseCode();
-            System.out.println("Code de réponse : " + responseCode);
+            LOG.info("Code de réponse : " + responseCode);
             if (responseCode == HttpURLConnection.HTTP_CREATED) {
                 BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
                 String inputLine;
@@ -112,7 +192,7 @@ public class Serveur {
                 }
                 in.close();
 
-                System.out.println(response.toString());
+                LOG.info(response.toString());
                 return response.toString().split("\"")[3];
             } else if (responseCode == HttpURLConnection.HTTP_CONFLICT) {
                 BufferedReader in = new BufferedReader(new InputStreamReader(con.getErrorStream()));
@@ -123,9 +203,9 @@ public class Serveur {
                 }
                 in.close();
 
-                System.out.println("Erreur : " + response.toString());
+                LOG.severe("Erreur : " + response.toString());
             } else {
-                System.out.println("Erreur : La requête a échoué avec le code " + responseCode);
+                LOG.severe("Erreur : La requête a échoué avec le code " + responseCode);
             }
 
 
@@ -136,7 +216,7 @@ public class Serveur {
         }
     }
 
-    public int validateWork(int difficulty, String nonce, String hash) {
+    private int validateWork(int difficulty, String nonce, String hash) {
         try {
             String url = "https://projet-raizo-idmc.netlify.app/.netlify/functions/validate_work";
 
@@ -187,8 +267,6 @@ public class Serveur {
 
     public static void main(String[] args) throws Exception {
         new Serveur().run(args);
-        new Serveur().validateWork(5, "4", "0c4f12188163dae848bd233757f3b0966972dd9efcaa54af4de92dfceb2c755e");
-        new Serveur().generateWork(6);
     }
 
 }
