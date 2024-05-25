@@ -5,6 +5,7 @@ import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Objects;
+import java.util.logging.Logger;
 
 public class Connection implements Runnable {
 
@@ -25,6 +26,8 @@ public class Connection implements Runnable {
     private Serveur serveur;
 
     private ServerSocket serverSocket;
+
+    private static final Logger LOG = Logger.getLogger(Connection.class.getName());
 
     public Connection(String password, Serveur serveur, int number, ServerSocket serverSocket) {
         this.password = password;
@@ -61,6 +64,7 @@ public class Connection implements Runnable {
 
             /*
             Processus de connection
+            4 way hello
              */
 
             // On initie la connection
@@ -107,22 +111,67 @@ public class Connection implements Runnable {
                 connectionStatus = ConnectionStatus.IDLE;
             }
 
+
             /*
-            Séparation en 2 thread
-            Lecture / Maintiens en vie
+            On boucle et écoute et traite les messages reçus
              */
 
-            //On démarre un écouteur
-            //Lecture
-            Ecouteur ecouteur = new Ecouteur(this, socket, writer, reader);
-            Thread ecouteurThread = new Thread(ecouteur);
-            ecouteurThread.start();
-
-            //Maintient en vie
             Serveur.LOG.info("Connection " + number + " : " + "Démarrage de la boucle");
-            //On maintient la connection
-            while (socket.isConnected()) {
-                //On attend la fin de vie de la socket
+            boolean errorFound = false;
+            //On écoute et répond aux messages
+            while (socket.isConnected() && !errorFound) {
+                try {
+                    //On récupère le message
+                    String message = reader.readLine();
+
+                    /*
+                     * On traite le message
+                     */
+
+
+                    //Ready
+                    if (Objects.equals(message, "READY")) {
+                        readyReceived();
+                        writer.println("OK");
+                        writer.flush();
+
+
+                    //Found
+                    } else if (message != null && message.startsWith("FOUND ")) {
+                        String[] args = message.split(" ");
+                        if (args.length != 3) {
+                            LOG.severe("Message reçu invalide, la connection va être fermée\nmessage :\n" + message);
+                            killConnection(socket, writer, reader);
+                        }
+                        foundReceived(new Solution(args[1], args[2]));
+
+
+                    //STATUS (Réponse au PROGRESS)
+                    } else if (message != null && message.startsWith("STATUS ")) {
+                        LOG.info("Connection " + getNumber() + " : Status reçu (" + message + ")");
+                        statusReceived(message.substring(6));
+
+
+                    //Message inconnu
+                    } else {
+                        LOG.severe("Message reçu invalide, la connection va être fermée\nmessage :\n" + message);
+                        killConnection(socket, writer, reader);
+                    }
+
+
+                } catch (IOException e) {
+                    errorFound = true;
+                    //Si c'est fini on laisse juste tout mourir
+                    if (!socket.isClosed()) {
+                        LOG.severe("Erreur dans reader ou writer " + e.getMessage());
+                        try {
+                            killConnection(socket, writer, reader);
+                        } catch (IOException ex) {
+                            throw new RuntimeException(ex);
+                        }
+                    }
+
+                }
             }
             Serveur.LOG.info("Connection " + number + " : " + "Sortie de la boucle");
 
@@ -136,9 +185,6 @@ public class Connection implements Runnable {
         }
     }
 
-    /*
-    Appelé par l'écouteur
-     */
 
     /**
      * Tue la connection fournie proprement
@@ -146,22 +192,22 @@ public class Connection implements Runnable {
      * @param socket socket de la connection à tuer
      * @throws IOException renvoyé si une erreur se produit lors de la fermeture du socket
      */
-    public void killConnection(Socket socket, PrintWriter writer, BufferedReader reader) throws IOException {
+    private void killConnection(Socket socket, PrintWriter writer, BufferedReader reader) throws IOException {
         connectionStatus = ConnectionStatus.DEAD;
         writer.close();
         reader.close();
         socket.close();
     }
 
-    public void readyReceived() {
+    private void readyReceived() {
         connectionStatus = ConnectionStatus.IDLE;
     }
 
-    public void foundReceived(Solution solution) {
+    private void foundReceived(Solution solution) {
         serveur.solutionFound(this, solution);
     }
 
-    public void statusReceived(String status) {
+    private void statusReceived(String status) {
         serveur.statusObtained(this, status);
     }
 
