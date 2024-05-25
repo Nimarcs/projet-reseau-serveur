@@ -19,6 +19,7 @@ public class Serveur {
     public static final Logger LOG = Logger.getLogger(Serveur.class.getName());
 
     private final String password = "aeea9e5b015e6ea2a501df9b0d96902a7e847bc952141ce03e7627c9ee5f96e0";
+
     private static final String usageMessage = """
             Usage :
             Serveur
@@ -40,6 +41,11 @@ public class Serveur {
 
     private ThreadGroup connectionGroup;
 
+    /**
+     * Methode principale, fait tourner tout le serveur
+     * @param args arguments fournit aux lancement
+     * @throws Exception Exceptions qui ont réussi à remonter jusqu'ici
+     */
     public void run(String[] args) throws Exception {
 
         List<String> arguments = Arrays.asList(args);
@@ -125,6 +131,11 @@ public class Serveur {
         System.exit(0);
     }
 
+    /**
+     * Methode qui gère les commandes écrite par l'utilisateur
+     * @param cmd commande écrite par l'utilisateur
+     * @return booléen a vrai si le programme doit continuer, a faux s'il doit s'arrêter.
+     */
     private boolean processCommand(String cmd) {
         if (("quit").equals(cmd)) {
             for (Connection connection : getNotAloneConnections()) {
@@ -188,6 +199,10 @@ public class Serveur {
         return true;
     }
 
+    /**
+     * Renvoie les connexions qui on un worker
+     * @return list de connexion
+     */
     private List<Connection> getNotAloneConnections() {
         return connections.stream()
                 .filter((connection -> connection.getConnectionStatus() != ConnectionStatus.ALONE))
