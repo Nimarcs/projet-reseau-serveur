@@ -18,12 +18,7 @@ public class Serveur {
 
     public static final Logger LOG = Logger.getLogger(Serveur.class.getName());
 
-    private static int maxNbConnection = 10; // Nombre maximum de connection simultanée par défaut
-
-    private List<Connection> connections = new LinkedList<>();
-
-    private List<Thread> threads = new LinkedList<>();
-
+    private final String password = "aeea9e5b015e6ea2a501df9b0d96902a7e847bc952141ce03e7627c9ee5f96e0";
     private static final String usageMessage = """
             Usage :
             Serveur
@@ -34,7 +29,16 @@ public class Serveur {
              [-i|--ip IP_ADRESS] - Specifie l'adresse ip utilise par le serveur (default : 127.0.0.1)
             """;
 
-    private String password = "aeea9e5b015e6ea2a501df9b0d96902a7e847bc952141ce03e7627c9ee5f96e0";
+    private static int maxNbConnection = 10; // Nombre maximum de connection simultanée par défaut
+
+
+    private List<Connection> connections = new LinkedList<>();
+
+    private List<Thread> threads = new LinkedList<>();
+
+    private ServerSocket serverSocket;
+
+    private ThreadGroup connectionGroup;
 
     public void run(String[] args) throws Exception {
 
@@ -95,8 +99,8 @@ public class Serveur {
 
 
         // Initialise le groupe de connection
-        ServerSocket serverSocket = new ServerSocket(port, maxNbConnection, bindAddress);
-        ThreadGroup connectionGroup = new ThreadGroup("Groupe de connection");
+        serverSocket = new ServerSocket(port, maxNbConnection, bindAddress);
+        connectionGroup = new ThreadGroup("Groupe de connection");
         Connection firstConnection = new Connection(password, this, threads.size(), serverSocket, LOG.getLevel() == Level.INFO);
         Thread firstThread = new Thread(connectionGroup, firstConnection);
         firstThread.start();
@@ -113,18 +117,29 @@ public class Serveur {
 
             //Si toute les connections sont prises et qu'on a pas atteint le max, on en ajoute une
             if (maxNbConnection > connections.size() && connections.get(connections.size()-1).getConnectionStatus() != ConnectionStatus.ALONE){
-                System.out.println("Totalité de connection utilisé, ajout d'une nouvelle connection");
-                //On créer et lance la nouvelle connection
-                Connection newConnection = new Connection(password, this, threads.size(), serverSocket, LOG.getLevel() == Level.INFO);
-                Thread newThread = new Thread(connectionGroup, newConnection);
-                newThread.start();
-                threads.add(newThread);
-                connections.add(newConnection);
+                addConnexion();
             }
 
             keepGoing = processCommand(commande.trim());
         }
         System.exit(0);
+    }
+
+    /**
+     * Permet d'ajouter une connexion si le maximum n'a pas été atteint
+     */
+    public void addConnexion() {
+        if (maxNbConnection > connections.size()) {
+            System.out.println("Totalité de connection utilisé, ajout d'une nouvelle connection");
+            //On créer et lance la nouvelle connection
+            Connection newConnection = new Connection(password, this, threads.size(), serverSocket, LOG.getLevel() == Level.INFO);
+            Thread newThread = new Thread(connectionGroup, newConnection);
+            newThread.start();
+            threads.add(newThread);
+            connections.add(newConnection);
+        } else {
+            System.out.println("Toutes les connexions utilisée");
+        }
     }
 
     private boolean processCommand(String cmd) {

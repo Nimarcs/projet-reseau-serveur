@@ -64,6 +64,10 @@ public class Connection implements Runnable {
             Serveur.LOG.info("Connection " + number + " : " + "En attente de connection");
             socket = serverSocket.accept();
             Serveur.LOG.info("Connection " + number + " : " + "Connection trouvé avec " + socket.toString());
+
+            //Cette connexion viens d'être prise donc le serveurs n'en a plus de disponible
+            serveur.addConnexion();
+
             writer = new PrintWriter(new OutputStreamWriter(socket.getOutputStream()));
             reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
