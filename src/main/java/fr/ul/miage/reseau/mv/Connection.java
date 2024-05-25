@@ -199,14 +199,25 @@ public class Connection implements Runnable {
         socket.close();
     }
 
+    /**
+     * Action a effectuer si on reçoit READY du worker
+     */
     private void readyReceived() {
         connectionStatus = ConnectionStatus.IDLE;
     }
 
+    /**
+     * Action a effectuer si on reçoit FOUND du worker
+     * @param solution solution trouvée
+     */
     private void foundReceived(Solution solution) {
         serveur.solutionFound(this, solution);
     }
 
+    /**
+     * Action a effectuer si on reçoit STATUS du worker
+     * @param status status reçu
+     */
     private void statusReceived(String status) {
         serveur.statusObtained(this, status);
     }
@@ -237,6 +248,9 @@ public class Connection implements Runnable {
         writer.flush();
     }
 
+    /**
+     * Annule l'ordre courrant (donc la recherche de solution)
+     */
     public void cancelOrder() {
         currentOrder = null;
         //on ment aux clients
@@ -253,11 +267,17 @@ public class Connection implements Runnable {
         writer.flush();
     }
 
+    /**
+     * Envoie au worker que l'on veux son status actuel
+     */
     public void obtainStatus() {
         writer.println("PROGRESS");
         writer.flush();
     }
 
+    /**
+     * Kill the connection
+     */
     public void killConnection() {
         try {
             killConnection(socket, writer, reader);
@@ -271,14 +291,27 @@ public class Connection implements Runnable {
     Getter
      */
 
+    /**
+     * getter de currentOrder l'ordre en cours de résolution
+     * @return currentOrder ordre en cours de résolution
+     */
     public Order getCurrentOrder() {
         return currentOrder;
     }
 
+    /**
+     * Getter de number le numéro de la connection
+     * @return number
+     */
     public int getNumber() {
         return number;
     }
 
+    /**
+     * Getter du status de la connection
+     * /!\ Différent du status du thread /!\
+     * @return status de la connection
+     */
     public ConnectionStatus getConnectionStatus() {
         return connectionStatus;
     }
