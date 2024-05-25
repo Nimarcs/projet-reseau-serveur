@@ -16,40 +16,33 @@ class Serveur {
     -validateWork(difficulty: int, nonce: String, hash: String): int
 }
 
-class Connection {
-    -connectionStatus: ConnectionStatus
-    -password: String
-    -currentOrder: Order
-    -writer: PrintWriter
-    -reader: BufferedReader
-    -socket: Socket
-    -number: int
-    -serveur: Serveur
-    -serverSocket: ServerSocket
-    +Connection(password: String, serveur: Serveur, number: int, serverSocket: ServerSocket)
-    +run(): void
-    +killConnection(socket: Socket, writer: PrintWriter, reader: BufferedReader): void
-    +readyReceived(): void
-    +foundReceived(solution: Solution): void
-    +statusReceived(status: String): void
-    +setNewOrder(order: Order): void
-    +cancelOrder(): void
-    +tooSlow(): void
-    +obtainStatus(): void
-    +scheduleKilling(): void
-    +getCurrentOrder(): Order
-    +getNumber(): int
-    +getConnectionStatus(): ConnectionStatus
-}
+class Connection implements Runnable {
+    - ConnectionStatus connectionStatus
+    - final String password
+    - Order currentOrder
+    - PrintWriter writer
+    - BufferedReader reader
+    - Socket socket
+    - int number
+    - Serveur serveur
+    - ServerSocket serverSocket
+    - static final Logger LOG
 
-class Ecouteur {
-    -connection: Connection
-    -socket: Socket
-    -reader: BufferedReader
-    -writer: PrintWriter
-    -errorFound: boolean
-    +Ecouteur(connection: Connection, socket: Socket, writer: PrintWriter, reader: BufferedReader)
-    +run(): void
+    + Connection(String password, Serveur serveur, int number, ServerSocket serverSocket, boolean debug)
+    + void run()
+    + void setNewOrder(Order order)
+    + void cancelOrder()
+    + void tooSlow()
+    + void obtainStatus()
+    + void killConnection()
+
+    - void do4WaysHello() throws IOException
+    - void processMessage(String message) throws IOException
+    - void killConnection(Socket socket, PrintWriter writer, BufferedReader reader) throws IOException
+
+    + Order getCurrentOrder()
+    + int getNumber()
+    + ConnectionStatus getConnectionStatus()
 }
 
 class Solution {
@@ -83,10 +76,8 @@ enum ConnectionStatus {
     DEAD
 }
 
-Serveur -- Connection
-Serveur -- ConnectionStatus
-Serveur -- Solution
-Serveur -- Order
-Ecouteur -- Connection
 
+Serveur --> "1..maxNbConnection" Connection
+Connection --> ConnectionStatus : connectionStatus
+Connection --> Order : "currentOrder"
 @enduml
