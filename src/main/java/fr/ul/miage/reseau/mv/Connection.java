@@ -5,6 +5,7 @@ import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Objects;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class Connection implements Runnable {
@@ -29,11 +30,15 @@ public class Connection implements Runnable {
 
     private static final Logger LOG = Logger.getLogger(Connection.class.getName());
 
-    public Connection(String password, Serveur serveur, int number, ServerSocket serverSocket) {
+    public Connection(String password, Serveur serveur, int number, ServerSocket serverSocket, boolean debug) {
         this.password = password;
         this.number = number;
         this.serveur = serveur;
         this.serverSocket = serverSocket;
+
+        LOG.setLevel(Level.WARNING);
+        if (debug)
+            LOG.setLevel(Level.INFO);
 
         connectionStatus = ConnectionStatus.ALONE;
         currentOrder = null;

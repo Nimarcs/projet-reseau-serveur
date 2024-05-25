@@ -96,7 +96,7 @@ public class Serveur {
         // Initialise le groupe de connection
         ServerSocket serverSocket = new ServerSocket(port, maxNbConnection, bindAddress);
         ThreadGroup connectionGroup = new ThreadGroup("Groupe de connection");
-        Connection firstConnection = new Connection(password, this, threads.size(), serverSocket);
+        Connection firstConnection = new Connection(password, this, threads.size(), serverSocket, LOG.getLevel() == Level.INFO);
         Thread firstThread = new Thread(connectionGroup, firstConnection);
         firstThread.start();
         threads.add(firstThread);
@@ -114,7 +114,7 @@ public class Serveur {
             if (maxNbConnection > connections.size() && connections.get(connections.size()-1).getConnectionStatus() != ConnectionStatus.ALONE){
                 System.out.println("Totalité de connection utilisé, ajout d'une nouvelle connection");
                 //On créer et lance la nouvelle connection
-                Connection newConnection = new Connection(password, this, threads.size(), serverSocket);
+                Connection newConnection = new Connection(password, this, threads.size(), serverSocket, LOG.getLevel() == Level.INFO);
                 Thread newThread = new Thread(connectionGroup, newConnection);
                 newThread.start();
                 threads.add(newThread);
@@ -179,6 +179,7 @@ public class Serveur {
                         connection.setNewOrder(new Order(i, nbConnected, difficulty, payload));
                     }
                 }
+                System.out.println("Minage débuté");
 
             } catch (NumberFormatException e) {
                 LOG.severe("solve <d> - try to mine with given difficulty prend un nombre en parametre.\n" + cmd.substring(6) + " n'est pas un nombre");
