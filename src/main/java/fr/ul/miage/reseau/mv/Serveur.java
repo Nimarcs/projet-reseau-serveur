@@ -30,6 +30,8 @@ public class Serveur {
              [-c|--connection NUMBER_OF_CONNECTION] - Specifie le nombre de connection maximale (default : 10)
              [-d|--debug] - Active le mode debug
              [-h|--help] - Affiche ce message
+             [-p|--port PORT_NUMBER] - Specifie le numero du port (default : 1337)
+             [-i|--ip IP_ADRESS] - Specifie l'adresse ip utilise par le serveur (default : 127.0.0.1)
             """;
 
     private String password = "GAUTIER_EST_TRES_CHAUD";
@@ -62,11 +64,39 @@ public class Serveur {
             }
         }
 
+        // Gestion de --port
+        int port = 1337;
+        pos = arguments.indexOf("-p");
+        if (pos == -1) pos = arguments.indexOf("--port");
+        // If pos == -1 then the parameter -c is not there
+        if (pos != -1) {
+            try {
+                port = Integer.parseInt(arguments.get(pos + 1));
+            } catch (NumberFormatException | IndexOutOfBoundsException e) {
+                LOG.severe(usageMessage);
+                System.exit(2);
+            }
+        }
+
+        // Gestion de --ip
+        InetAddress bindAddress = InetAddress.getByName("127.0.0.1");
+        pos = arguments.indexOf("-i");
+        if (pos == -1) pos = arguments.indexOf("--ip");
+        // If pos == -1 then the parameter -c is not there
+        if (pos != -1) {
+            try {
+                bindAddress = InetAddress.getByName(arguments.get(pos + 1));
+            } catch (java.net.UnknownHostException | IndexOutOfBoundsException e) {
+                LOG.severe(usageMessage);
+                System.exit(3);
+            }
+        }
+
+
         // Initialise le groupe de connection
-        final InetAddress bindAddress = InetAddress.getByName("127.0.0.1");
-        ServerSocket serverSocket = new ServerSocket(25555, maxNbConnection, bindAddress);
+        ServerSocket serverSocket = new ServerSocket(port, maxNbConnection, bindAddress);
         ThreadGroup connectionGroup = new ThreadGroup("Groupe de connection");
-        Connection firstConnection = new Connection(password, this, threads.size(), serverSocket);
+        Connection firstConnection = new Connection(password, this, threads.size(), serverSocket, LOG.getLevel() == Level.INFO);
         Thread firstThread = new Thread(connectionGroup, firstConnection);
         firstThread.start();
         threads.add(firstThread);
@@ -84,7 +114,7 @@ public class Serveur {
             if (maxNbConnection > connections.size() && connections.get(connections.size()-1).getConnectionStatus() != ConnectionStatus.ALONE){
                 System.out.println("Totalité de connection utilisé, ajout d'une nouvelle connection");
                 //On créer et lance la nouvelle connection
-                Connection newConnection = new Connection(password, this, threads.size(), serverSocket);
+                Connection newConnection = new Connection(password, this, threads.size(), serverSocket, LOG.getLevel() == Level.INFO);
                 Thread newThread = new Thread(connectionGroup, newConnection);
                 newThread.start();
                 threads.add(newThread);
@@ -99,7 +129,7 @@ public class Serveur {
     private boolean processCommand(String cmd) {
         if (("quit").equals(cmd)) {
             for (Connection connection : getNotAloneConnections()) {
-                connection.scheduleKilling();
+                connection.killConnection();
             }
             return false;
         }
@@ -149,6 +179,7 @@ public class Serveur {
                         connection.setNewOrder(new Order(i, nbConnected, difficulty, payload));
                     }
                 }
+                System.out.println("Minage débuté");
 
             } catch (NumberFormatException e) {
                 LOG.severe("solve <d> - try to mine with given difficulty prend un nombre en parametre.\n" + cmd.substring(6) + " n'est pas un nombre");

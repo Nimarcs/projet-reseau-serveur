@@ -5,6 +5,8 @@ import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Objects;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class Connection implements Runnable {
 
@@ -26,11 +28,17 @@ public class Connection implements Runnable {
 
     private ServerSocket serverSocket;
 
-    public Connection(String password, Serveur serveur, int number, ServerSocket serverSocket) {
+    private static final Logger LOG = Logger.getLogger(Connection.class.getName());
+
+    public Connection(String password, Serveur serveur, int number, ServerSocket serverSocket, boolean debug) {
         this.password = password;
         this.number = number;
         this.serveur = serveur;
         this.serverSocket = serverSocket;
+
+        LOG.setLevel(Level.WARNING);
+        if (debug)
+            LOG.setLevel(Level.INFO);
 
         connectionStatus = ConnectionStatus.ALONE;
         currentOrder = null;
@@ -61,69 +69,23 @@ public class Connection implements Runnable {
 
             /*
             Processus de connection
+            4 way hello
              */
 
-            // On initie la connection
-            Serveur.LOG.info("Connection " + number + " : " + "WHO_ARE_YOU_? envoyé");
-            writer.println("WHO_ARE_YOU_?");
-            writer.flush();
-
-            // S'il ne répond pas correctement on tue la connection
-            String supposedItsME = reader.readLine();
-            if (!Objects.equals(supposedItsME, "ITS_ME")) {
-                Serveur.LOG.info("Connection " + number + " : " + "ITS_ME non reçu");
-                killConnection(socket, writer, reader);
-            }
-            Serveur.LOG.info("Connection " + number + " : " + "ITS_ME reçu");
-
-            //On demande le mot de passe
-            Serveur.LOG.info("Connection " + number + " : " + "GIMME_PASSWORD envoyé");
-            writer.println("GIMME_PASSWORD");
-            writer.flush();
-
-            String supposedPassword = reader.readLine();
-            // Si le mot de passe est incorrect
-            if (!Objects.equals(supposedPassword, "PASSWD " + password)) {
-                // On précise au client que son mot de passe est faux puis ferme la connection
-                Serveur.LOG.info("Connection " + number + " : " + "YOU_DONT_FOOL_ME envoyé");
-                writer.println("YOU_DONT_FOOL_ME");
-                writer.flush();
-
-                killConnection(socket, writer, reader);
-            } else {
-                Serveur.LOG.info("Connection " + number + " : " + "HELLO_YOU envoyé");
-                writer.println("HELLO_YOU");
-                writer.flush();
-
-                String supposedREADY = reader.readLine();
-                if (!Objects.equals(supposedREADY, "READY")) {
-                    Serveur.LOG.info("Connection " + number + " : " + "READY non reçu");
-                    killConnection(socket, writer, reader);
-                }
-                Serveur.LOG.info("Connection " + number + " : " + "OK envoyé");
-                writer.println("OK");
-                writer.flush();
-
-                connectionStatus = ConnectionStatus.IDLE;
-            }
+            do4WaysHello();
 
             /*
-            Séparation en 2 thread
-            Lecture / Maintiens en vie
+            On boucle et écoute et traite les messages reçus
              */
 
-            //On démarre un écouteur
-            //Lecture
-            Ecouteur ecouteur = new Ecouteur(this, socket, writer, reader);
-            Thread ecouteurThread = new Thread(ecouteur);
-            ecouteurThread.start();
-
-            //Maintient en vie
             Serveur.LOG.info("Connection " + number + " : " + "Démarrage de la boucle");
-            //On maintient la connection
+
+            //On écoute et répond aux messages
             while (socket.isConnected()) {
-                //On attend la fin de vie de la socket
+                String message = reader.readLine();
+                processMessage(message);
             }
+
             Serveur.LOG.info("Connection " + number + " : " + "Sortie de la boucle");
 
             //Si on n'a pas déjà tué la connection, on la tue
@@ -132,38 +94,15 @@ public class Connection implements Runnable {
             }
         } catch (IOException | RuntimeException e) {
             connectionStatus = ConnectionStatus.DEAD;
+            try {
+                killConnection(socket, writer, reader);
+            } catch (IOException ex) {
+                throw new RuntimeException(ex);
+            }
             e.printStackTrace();
         }
     }
 
-    /*
-    Appelé par l'écouteur
-     */
-
-    /**
-     * Tue la connection fournie proprement
-     *
-     * @param socket socket de la connection à tuer
-     * @throws IOException renvoyé si une erreur se produit lors de la fermeture du socket
-     */
-    public void killConnection(Socket socket, PrintWriter writer, BufferedReader reader) throws IOException {
-        connectionStatus = ConnectionStatus.DEAD;
-        writer.close();
-        reader.close();
-        socket.close();
-    }
-
-    public void readyReceived() {
-        connectionStatus = ConnectionStatus.IDLE;
-    }
-
-    public void foundReceived(Solution solution) {
-        serveur.solutionFound(this, solution);
-    }
-
-    public void statusReceived(String status) {
-        serveur.statusObtained(this, status);
-    }
 
     /*
     Appelé par le serveur
@@ -191,6 +130,9 @@ public class Connection implements Runnable {
         writer.flush();
     }
 
+    /**
+     * Annule l'ordre courrant (donc la recherche de solution)
+     */
     public void cancelOrder() {
         currentOrder = null;
         //on ment aux clients
@@ -207,12 +149,18 @@ public class Connection implements Runnable {
         writer.flush();
     }
 
+    /**
+     * Envoie au worker que l'on veux son status actuel
+     */
     public void obtainStatus() {
         writer.println("PROGRESS");
         writer.flush();
     }
 
-    public void scheduleKilling() {
+    /**
+     * Kill the connection
+     */
+    public void killConnection() {
         try {
             killConnection(socket, writer, reader);
         } catch (IOException e) {
@@ -222,17 +170,140 @@ public class Connection implements Runnable {
     }
 
     /*
+    Methode privée
+     */
+
+
+    /**
+     * Permet d'initier une connection entre client et worker
+     * Ce passe en théorie comme ceci
+     * > WHO_ARE_YOU_?
+     * < ITS_ME
+     * > GIMME_PASSWORD
+     * < PASSWD
+     * > HELLO_YOU / YOU_DONT_FOOL_ME
+     * Un READY est supposé être reçu après ce 4 ways hello
+     * @throws IOException en cas d'erreur sur l'envoie et la reception de message
+     */
+    private void do4WaysHello() throws IOException {
+        // On initie la connection
+        // S'il ne répond pas correctement on tue la connection
+
+        // > WHO_ARE_YOU_?
+        Serveur.LOG.info("Connection " + number + " : " + "WHO_ARE_YOU_? envoyé");
+        writer.println("WHO_ARE_YOU_?");
+        writer.flush();
+
+        // < ITS_ME
+        String supposedItsME = reader.readLine();
+        if (!Objects.equals(supposedItsME, "ITS_ME")) {
+            Serveur.LOG.info("Connection " + number + " : " + "ITS_ME non reçu");
+            killConnection(socket, writer, reader);
+        }
+        Serveur.LOG.info("Connection " + number + " : " + "ITS_ME reçu");
+
+        //On demande le mot de passe
+        // > GIMME_PASSWORD
+        Serveur.LOG.info("Connection " + number + " : " + "GIMME_PASSWORD envoyé");
+        writer.println("GIMME_PASSWORD");
+        writer.flush();
+
+        String supposedPassword = reader.readLine();
+        // Si le mot de passe est incorrect
+        if (!Objects.equals(supposedPassword, "PASSWD " + password)) {
+            // > YOU_DONT_FOOL_ME
+            // On précise au client que son mot de passe est faux puis ferme la connection
+            Serveur.LOG.info("Connection " + number + " : " + "YOU_DONT_FOOL_ME envoyé");
+            writer.println("YOU_DONT_FOOL_ME");
+            writer.flush();
+
+            killConnection(socket, writer, reader);
+
+        // Si le mot de passe est correct
+        } else {
+            // > HELLO_YOU
+            Serveur.LOG.info("Connection " + number + " : " + "HELLO_YOU envoyé");
+            writer.println("HELLO_YOU");
+            writer.flush();
+        }
+    }
+
+    /**
+     * On traite le message reçu du worker
+     * @param message message reçu
+     */
+    private void processMessage(String message) throws IOException {
+
+
+        //Ready
+        if (Objects.equals(message, "READY")) {
+            connectionStatus = ConnectionStatus.IDLE;
+            writer.println("OK");
+            writer.flush();
+
+
+            //Found
+        } else if (message != null && message.startsWith("FOUND ")) {
+            String[] args = message.split(" ");
+            if (args.length != 3) {
+                LOG.severe("Message reçu invalide, la connection va être fermée\nmessage :\n" + message);
+                killConnection(socket, writer, reader);
+            }
+            serveur.solutionFound(this, new Solution(args[1], args[2]));
+
+
+            //STATUS (Réponse au PROGRESS)
+        } else if (message != null && message.startsWith("STATUS ")) {
+            LOG.info("Connection " + getNumber() + " : Status reçu (" + message + ")");
+            serveur.statusObtained(this, message.substring(6));
+
+            //Message inconnu
+        } else {
+            LOG.severe("Message reçu invalide, la connection va être fermée\nmessage :\n" + message);
+            killConnection(socket, writer, reader);
+        }
+    }
+
+
+    /**
+     * Tue la connection fournie proprement
+     *
+     * @param socket socket de la connection à tuer
+     * @throws IOException renvoyé si une erreur se produit lors de la fermeture du socket
+     */
+    private void killConnection(Socket socket, PrintWriter writer, BufferedReader reader) throws IOException {
+        connectionStatus = ConnectionStatus.DEAD;
+        writer.close();
+        reader.close();
+        socket.close();
+    }
+
+
+    /*
     Getter
      */
 
+    /**
+     * getter de currentOrder l'ordre en cours de résolution
+     * @return currentOrder ordre en cours de résolution
+     */
     public Order getCurrentOrder() {
         return currentOrder;
     }
 
+    /**
+     * Getter de number le numéro de la connection
+     * @return number
+     */
     public int getNumber() {
         return number;
     }
 
+    /**
+     * Getter du status de la connection
+     * /!\ Différent du status du thread /!\
+     * @return status de la connection
+     */
     public ConnectionStatus getConnectionStatus() {
         return connectionStatus;
     }
