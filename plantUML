@@ -1,0 +1,92 @@
+@startuml
+
+class Serveur {
+    -LOG: Logger
+    -maxNbConnection: int
+    -connections: List<Connection>
+    -threads: List<Thread>
+    -usageMessage: String
+    -password: String
+    +run(args: String[]): void
+    +processCommand(cmd: String): boolean
+    +getNotAloneConnections(): List<Connection>
+    +solutionFound(connection: Connection, solution: Solution): void
+    +statusObtained(connection: Connection, status: String): void
+    -generateWork(difficulty: int): String
+    -validateWork(difficulty: int, nonce: String, hash: String): int
+}
+
+class Connection {
+    -connectionStatus: ConnectionStatus
+    -password: String
+    -currentOrder: Order
+    -writer: PrintWriter
+    -reader: BufferedReader
+    -socket: Socket
+    -number: int
+    -serveur: Serveur
+    -serverSocket: ServerSocket
+    +Connection(password: String, serveur: Serveur, number: int, serverSocket: ServerSocket)
+    +run(): void
+    +killConnection(socket: Socket, writer: PrintWriter, reader: BufferedReader): void
+    +readyReceived(): void
+    +foundReceived(solution: Solution): void
+    +statusReceived(status: String): void
+    +setNewOrder(order: Order): void
+    +cancelOrder(): void
+    +tooSlow(): void
+    +obtainStatus(): void
+    +scheduleKilling(): void
+    +getCurrentOrder(): Order
+    +getNumber(): int
+    +getConnectionStatus(): ConnectionStatus
+}
+
+class Ecouteur {
+    -connection: Connection
+    -socket: Socket
+    -reader: BufferedReader
+    -writer: PrintWriter
+    -errorFound: boolean
+    +Ecouteur(connection: Connection, socket: Socket, writer: PrintWriter, reader: BufferedReader)
+    +run(): void
+}
+
+class Solution {
+    -hash: String
+    -nonce: String
+    +Solution(hash: String, nonce: String)
+    +getHash(): String
+    +getNonce(): String
+}
+
+class Order {
+    -start: int
+    -increment: int
+    -difficulty: int
+    -payload: String
+    +Order(start: int, increment: int, difficulty: int, payload: String)
+    +getStart(): int
+    +getIncrement(): int
+    +getDifficulty(): int
+    +getPayload(): String
+    +setStart(start: int): void
+    +setIncrement(increment: int): void
+    +setDifficulty(difficulty: int): void
+    +setPayload(payload: String): void
+}
+
+enum ConnectionStatus {
+    ALONE
+    IDLE
+    WORKING
+    DEAD
+}
+
+Serveur -- Connection
+Serveur -- ConnectionStatus
+Serveur -- Solution
+Serveur -- Order
+Ecouteur -- Connection
+
+@enduml
