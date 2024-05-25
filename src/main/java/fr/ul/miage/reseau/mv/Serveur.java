@@ -30,6 +30,8 @@ public class Serveur {
              [-c|--connection NUMBER_OF_CONNECTION] - Specifie le nombre de connection maximale (default : 10)
              [-d|--debug] - Active le mode debug
              [-h|--help] - Affiche ce message
+             [-p|--port PORT_NUMBER] - Specifie le numero du port (default : 1337)
+             [-i|--ip IP_ADRESS] - Specifie l'adresse ip utilise par le serveur (default : 127.0.0.1)
             """;
 
     private String password = "GAUTIER_EST_TRES_CHAUD";
@@ -62,9 +64,37 @@ public class Serveur {
             }
         }
 
+        // Gestion de --port
+        int port = 1337;
+        pos = arguments.indexOf("-p");
+        if (pos == -1) pos = arguments.indexOf("--port");
+        // If pos == -1 then the parameter -c is not there
+        if (pos != -1) {
+            try {
+                port = Integer.parseInt(arguments.get(pos + 1));
+            } catch (NumberFormatException | IndexOutOfBoundsException e) {
+                LOG.severe(usageMessage);
+                System.exit(2);
+            }
+        }
+
+        // Gestion de --ip
+        InetAddress bindAddress = InetAddress.getByName("127.0.0.1");
+        pos = arguments.indexOf("-i");
+        if (pos == -1) pos = arguments.indexOf("--ip");
+        // If pos == -1 then the parameter -c is not there
+        if (pos != -1) {
+            try {
+                bindAddress = InetAddress.getByName(arguments.get(pos + 1));
+            } catch (java.net.UnknownHostException | IndexOutOfBoundsException e) {
+                LOG.severe(usageMessage);
+                System.exit(3);
+            }
+        }
+
+
         // Initialise le groupe de connection
-        final InetAddress bindAddress = InetAddress.getByName("127.0.0.1");
-        ServerSocket serverSocket = new ServerSocket(1337, maxNbConnection, bindAddress);
+        ServerSocket serverSocket = new ServerSocket(port, maxNbConnection, bindAddress);
         ThreadGroup connectionGroup = new ThreadGroup("Groupe de connection");
         Connection firstConnection = new Connection(password, this, threads.size(), serverSocket);
         Thread firstThread = new Thread(connectionGroup, firstConnection);
