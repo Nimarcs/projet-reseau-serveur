@@ -258,7 +258,7 @@ public class Connection implements Runnable {
         writer.flush();
     }
 
-    public void scheduleKilling() {
+    public void killConnection() {
         try {
             killConnection(socket, writer, reader);
         } catch (IOException e) {

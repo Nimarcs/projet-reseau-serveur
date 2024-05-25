@@ -129,7 +129,7 @@ public class Serveur {
     private boolean processCommand(String cmd) {
         if (("quit").equals(cmd)) {
             for (Connection connection : getNotAloneConnections()) {
-                connection.scheduleKilling();
+                connection.killConnection();
             }
             return false;
         }
