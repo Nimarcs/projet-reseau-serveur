@@ -1,20 +1,25 @@
 @startuml
 
 class Serveur {
-    -LOG: Logger
-    -maxNbConnection: int
-    -connections: List<Connection>
-    -threads: List<Thread>
-    -usageMessage: String
-    -password: String
-    +run(args: String[]): void
-    +processCommand(cmd: String): boolean
-    +getNotAloneConnections(): List<Connection>
-    +solutionFound(connection: Connection, solution: Solution): void
-    +statusObtained(connection: Connection, status: String): void
-    -generateWork(difficulty: int): String
-    -validateWork(difficulty: int, nonce: String, hash: String): int
+    - LOG: Logger
+    - password: String
+    - usageMessage: String
+    - maxNbConnection: int
+    - connections: List<Connection>
+    - threads: List<Thread>
+    - serverSocket: ServerSocket
+    - connectionGroup: ThreadGroup
+    + run(args: String[]): void
+    - processCommand(cmd: String): boolean
+    - getNotAloneConnections(): List<Connection>
+    + solutionFound(connection: Connection, solution: Solution): void
+    + statusObtained(connection: Connection, status: String): void
+    + addConnexion(): void
+    - generateWork(difficulty: int): String
+    - validateWork(difficulty: int, nonce: String, hash: String): int
+    + main(args: String[]): void
 }
+
 
 class Connection implements Runnable {
     - ConnectionStatus connectionStatus
