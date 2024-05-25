@@ -34,13 +34,14 @@ public class Serveur {
              [-i|--ip IP_ADRESS] - Specifie l'adresse ip utilise par le serveur (default : 127.0.0.1)
             """;
 
-    private String password = "GAUTIER_EST_TRES_CHAUD";
+    private String password = "aeea9e5b015e6ea2a501df9b0d96902a7e847bc952141ce03e7627c9ee5f96e0";
 
     public void run(String[] args) throws Exception {
 
         List<String> arguments = Arrays.asList(args);
         LOG.setLevel(Level.WARNING);
 
+        // L'utilisation d'une librairie de gestion de commande pourrait simplifier grandement cette partie
         //Gestion de --help
         if (arguments.contains("-h") || arguments.contains("--help")) {
             System.out.println(usageMessage);
