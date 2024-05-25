@@ -64,7 +64,7 @@ public class Serveur {
 
         // Initialise le groupe de connection
         final InetAddress bindAddress = InetAddress.getByName("127.0.0.1");
-        ServerSocket serverSocket = new ServerSocket(25555, maxNbConnection, bindAddress);
+        ServerSocket serverSocket = new ServerSocket(1337, maxNbConnection, bindAddress);
         ThreadGroup connectionGroup = new ThreadGroup("Groupe de connection");
         Connection firstConnection = new Connection(password, this, threads.size(), serverSocket);
         Thread firstThread = new Thread(connectionGroup, firstConnection);
