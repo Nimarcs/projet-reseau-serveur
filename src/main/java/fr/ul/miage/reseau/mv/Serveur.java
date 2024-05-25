@@ -125,23 +125,6 @@ public class Serveur {
         System.exit(0);
     }
 
-    /**
-     * Permet d'ajouter une connexion si le maximum n'a pas été atteint
-     */
-    public void addConnexion() {
-        if (maxNbConnection > connections.size()) {
-            System.out.println("Totalité de connection utilisé, ajout d'une nouvelle connection");
-            //On créer et lance la nouvelle connection
-            Connection newConnection = new Connection(password, this, threads.size(), serverSocket, LOG.getLevel() == Level.INFO);
-            Thread newThread = new Thread(connectionGroup, newConnection);
-            newThread.start();
-            threads.add(newThread);
-            connections.add(newConnection);
-        } else {
-            System.out.println("Toutes les connexions utilisée");
-        }
-    }
-
     private boolean processCommand(String cmd) {
         if (("quit").equals(cmd)) {
             for (Connection connection : getNotAloneConnections()) {
@@ -209,6 +192,27 @@ public class Serveur {
         return connections.stream()
                 .filter((connection -> connection.getConnectionStatus() != ConnectionStatus.ALONE))
                 .toList();
+    }
+
+    /*
+    Methode appelé par les connexions
+     */
+
+    /**
+     * Permet d'ajouter une connexion si le maximum n'a pas été atteint
+     */
+    public void addConnexion() {
+        if (maxNbConnection > connections.size()) {
+            System.out.println("Totalité de connection utilisé, ajout d'une nouvelle connection");
+            //On créer et lance la nouvelle connection
+            Connection newConnection = new Connection(password, this, threads.size(), serverSocket, LOG.getLevel() == Level.INFO);
+            Thread newThread = new Thread(connectionGroup, newConnection);
+            newThread.start();
+            threads.add(newThread);
+            connections.add(newConnection);
+        } else {
+            System.out.println("Toutes les connexions utilisée");
+        }
     }
 
     /**
